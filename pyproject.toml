@@ -4,12 +4,32 @@ build-backend = "hatchling.build"
 
 [project]
 name = "procheiron"
-version = "0.1.0"
-description = "Governance and provenance layer for agent memory."
+version = "0.2.0"
+description = "Governance and provenance layer for agent memory: an enforced independent-review lifecycle with a tamper-evident, optionally-signed audit trail."
 readme = "README.md"
 license = { file = "LICENSE" }
 requires-python = ">=3.9"
+keywords = ["agent-memory", "provenance", "governance", "audit-trail", "tamper-evident", "llm", "mcp", "multi-agent"]
+classifiers = [
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Intended Audience :: Developers",
+  "Topic :: Security",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+]
+# The governance core is stdlib-only, zero runtime dependencies.
 dependencies = []
+
+[project.optional-dependencies]
+# Cryptographic authorship (ed25519 signing/verification of audit entries).
+# The hash chain (tamper-evidence) is stdlib and always available; this extra
+# only adds signature *authorship* proof. See signing.py.
+crypto = ["cryptography>=41"]
+
+[project.urls]
+Homepage = "https://github.com/procheiron/procheiron-core"
+Repository = "https://github.com/procheiron/procheiron-core"
+Issues = "https://github.com/procheiron/procheiron-core/issues"
 
 [project.scripts]
 procheiron = "procheiron.cli:main"

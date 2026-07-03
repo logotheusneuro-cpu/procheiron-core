@@ -37,7 +37,11 @@
     "supersessions_repaired": { "type": "integer" },
     "needs_manual_promote": { "type": "integer" },
     "profile_mismatches": { "type": "integer" },
-    "notes": { "type": "string" }
+    "notes": { "type": "string" },
+    "prev_hash": { "type": "string", "description": "entry_hash of the preceding audit event (GENESIS for the first) — the tamper-evident hash chain. See chain.py." },
+    "entry_hash": { "type": "string", "description": "BLAKE2b hex binding prev_hash + this event's canonical content; recomputed and continuity-checked by the validator when lint verify_audit_chain is on." },
+    "sig": { "type": "string", "description": "Optional ed25519 signature hex over entry_hash by the actor. Verified against known_actor_keys when lint verify_signatures is on." },
+    "sig_key_id": { "type": "string", "description": "Identity whose registered public key verifies `sig` — normally the event's actor." }
   },
   "anyOf": [
     { "required": ["created_at"] },

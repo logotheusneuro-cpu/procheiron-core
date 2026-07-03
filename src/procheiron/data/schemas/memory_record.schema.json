@@ -101,6 +101,18 @@
     },
     "notes": {
       "type": "string"
+    },
+    "content_hash": {
+      "type": "string",
+      "description": "Optional BLAKE2b hex over the record's canonical content — tamper-evidence for the record itself; also what an ed25519 signature signs over. See chain.py / signing.py."
+    },
+    "sig": {
+      "type": "string",
+      "description": "Optional ed25519 signature hex over content_hash, by the actor named in sig_key_id. Requires the optional 'crypto' extra. Verified against known_actor_keys when lint verify_signatures is on."
+    },
+    "sig_key_id": {
+      "type": "string",
+      "description": "Identity whose registered ed25519 public key (known_actor_keys) verifies `sig` — normally created_by."
     }
   },
   "allOf": [

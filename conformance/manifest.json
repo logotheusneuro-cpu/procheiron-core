@@ -23,6 +23,7 @@
     {"name": "neg: prose supersession without structured supersedes", "kind": "fail", "tamper": "prose-supersession", "expect_reasons": ["prose supersession claim without structured supersedes"]},
     {"name": "neg: dangling config token", "kind": "fail", "tamper": "dangling-token", "expect_reasons": ["dangling token"]},
     {"name": "neg: deployment literal welded into Core doc", "kind": "fail", "tamper": "weld", "expect_reasons": ["deployment weld in Core doc"]},
-    {"name": "neg: tilde-home path welded into Core doc", "kind": "fail", "tamper": "tilde-weld", "expect_reasons": [":absolute-path"]}
+    {"name": "neg: tilde-home path welded into Core doc", "kind": "fail", "tamper": "tilde-weld", "expect_reasons": [":absolute-path"]},
+    {"name": "neg: audit event silently edited (broken hash chain)", "kind": "fail", "tamper": "chain-break", "expect_reasons": ["audit chain"]}
   ]
 }

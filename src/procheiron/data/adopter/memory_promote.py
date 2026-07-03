@@ -201,6 +201,22 @@ def append_jsonl(path: Path, obj: Dict[str, Any]) -> None:
         os.close(fd)
 
 
+def _append_audit_event(path: Path, event: Dict[str, Any]) -> None:
+    """Append an audit event, hash-chaining it (and ed25519-signing it when
+    PROCHEIRON_SIGNING_KEY is set) via the installed procheiron package. Falls back
+    to a plain append when the package/chain helper is unavailable — the event is
+    then unchained, and a deployment running lint `verify_audit_chain` will flag it.
+    Preserves the writers' audit-line-first, atomic O_NOFOLLOW append discipline."""
+    try:
+        from procheiron import chain as _chain  # type: ignore
+    except Exception:
+        _chain = None
+    if _chain is not None:
+        _chain.append_event(path, event, key_hex=os.environ.get("PROCHEIRON_SIGNING_KEY") or None)
+    else:
+        append_jsonl(path, event)
+
+
 class Lock:
     def __init__(self, root: Path) -> None:
         lock_dir = root / ".procheiron" / "locks"
@@ -338,7 +354,7 @@ def main() -> None:
                        "attempted_status": new_status, "created_by": created_by, "refused": True,
                        "timestamp": _now, "created_at": _now, "reason": reason, "tool": "memory_promote.py"}
                 try:
-                    append_jsonl(audit_path, _ev)
+                    _append_audit_event(audit_path, _ev)
                 except Exception as _exc:  # logging must never swallow the refusal
                     print(f"memory_promote: WARNING — could not log refusal ({_exc})", file=sys.stderr)
             fail(reason)
@@ -479,7 +495,7 @@ def main() -> None:
             # that didn't land — tolerated (validator checks active⇒event, not the
             # reverse) — rather than a status change with NO audit event, which is
             # exactly the forge-indistinguishable state the gate exists to prevent.
-            append_jsonl(audit_path, event)
+            _append_audit_event(audit_path, event)
             if supersession_entry is not None:
                 append_jsonl(supersessions_path, supersession_entry)
             dump_jsonl_atomic(memories_path, records)

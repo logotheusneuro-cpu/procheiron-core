@@ -37,8 +37,20 @@
     "vera_ingest_bot"
   ],
   "known_actor_groups": [
-    ["atlas_drafter", "atlas_review_bot"],
-    ["vera_curator", "vera_ingest_bot"]
+    [
+      "atlas_drafter",
+      "atlas_review_bot"
+    ],
+    [
+      "vera_curator",
+      "vera_ingest_bot"
+    ]
   ],
-  "note": "Meridian Atelier deployment lint — conformance test profile. Constitutional authority: Dana Okoro. Actor groups are separated so cross-group review is possible between the atlas_* cluster and the vera_* cluster."
+  "note": "Meridian Atelier deployment lint — conformance test profile. Constitutional authority: Dana Okoro. Actor groups are separated so cross-group review is possible between the atlas_* cluster and the vera_* cluster.",
+  "verify_audit_chain": true,
+  "known_actor_keys": {
+    "dana_okoro": "cd3017526ee85729d6189fd9c1b0ec35f056bdfb46e71431305de9cfe2c1f52e",
+    "vera_curator": "04ced193c2845eb89880ae942474c55bb0b8752bdf23e1e45f30c813bf081688",
+    "vera_ingest_bot": "c9dee9b7c9cf384595c56813a1287950fe2b42c879de9aa9fb3f40bfabc0aea1"
+  }
 }

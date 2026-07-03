@@ -1,0 +1,65 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  # The governance core is stdlib-only: conformance + smoke tests must pass with
+  # ZERO dependencies installed. Signature checks self-skip here (no cryptography).
+  base-stdlib:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ["3.9", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Conformance (stdlib, zero runtime deps)
+        run: python3 conformance/run_conformance.py
+      - name: Smoke tests
+        run: |
+          PYTHONPATH=src python3 conformance/test_crypto_smoke.py
+          PYTHONPATH=src python3 conformance/test_policy_smoke.py
+          PYTHONPATH=src python3 conformance/test_mcp_smoke.py
+          PYTHONPATH=src python3 conformance/test_scorecard_smoke.py
+
+  # With the optional crypto extra, the signature fixtures run for real — the
+  # signed audit log must verify and a forged signature must be caught.
+  crypto:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install crypto extra
+        run: pip install -e ".[crypto]"
+      - name: Conformance with signatures (expect the ed25519 checks to run, not skip)
+        run: |
+          python3 conformance/run_conformance.py | tee /tmp/conf.txt
+          grep -q "signed audit log verifies (ed25519)" /tmp/conf.txt
+          grep -q "forged signature on audit event" /tmp/conf.txt
+          ! grep -q "SKIPPED: cryptography not installed" /tmp/conf.txt
+      - name: Crypto smoke
+        run: PYTHONPATH=src python3 conformance/test_crypto_smoke.py
+
+  # The authority policy is not reference-only: the Rego actually executes here,
+  # and the stdlib reference backend must agree with it (no silent drift).
+  policy-opa:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install OPA
+        run: |
+          curl -sSL -o /usr/local/bin/opa https://openpolicyagent.org/downloads/latest/opa_linux_amd64_static
+          chmod +x /usr/local/bin/opa
+          opa version
+      - name: opa test (the Rego policy runs, not just ships)
+        run: opa test src/procheiron/data/policy -v

@@ -112,7 +112,8 @@ def _lint_fingerprint(lint: Dict[str, Any]) -> str:
     keys = ['forbid_absolute_paths_in_core', 'forbid_absolute_paths_in_core_docs',
             'forbid_absolute_paths_in_memory_records', 'validate_memory_records',
             'core_docs', 'forbidden_core_doc_literals', 'required_console_extra',
-            'required_literals', 'forbidden_core_literals']
+            'required_literals', 'forbidden_core_literals',
+            'verify_audit_chain', 'verify_signatures', 'require_signatures']
     payload = json.dumps({k: lint.get(k) for k in keys}, sort_keys=True)
     return hashlib.sha256(payload.encode()).hexdigest()[:12]
 
@@ -157,9 +158,12 @@ def check_lint_schema(lint: Dict[str, Any], errors: List[str]) -> None:
         if key in lint and not isinstance(lint[key], list):
             errors.append(f'lint key {key!r} must be a list, got {type(lint[key]).__name__}')
     for key in ['forbid_absolute_paths_in_core', 'forbid_absolute_paths_in_core_docs',
-                'forbid_absolute_paths_in_memory_records', 'validate_memory_records']:
+                'forbid_absolute_paths_in_memory_records', 'validate_memory_records',
+                'verify_audit_chain', 'verify_signatures', 'require_signatures']:
         if key in lint and not isinstance(lint[key], bool):
             errors.append(f'lint key {key!r} must be a boolean, got {type(lint[key]).__name__}')
+    if 'known_actor_keys' in lint and not isinstance(lint['known_actor_keys'], dict):
+        errors.append(f"lint key 'known_actor_keys' must be an object, got {type(lint['known_actor_keys']).__name__}")
     for group in lint.get('known_actor_groups', []) if isinstance(lint.get('known_actor_groups'), list) else []:
         if not isinstance(group, list):
             errors.append('each known_actor_groups entry must be a list')
@@ -325,6 +329,43 @@ def validate_memory_records(cfg: Any, lint: Dict[str, Any], errors: List[str],
 
     def same_group(a: str, b: str) -> bool:
         return any(a in g and b in g for g in actor_groups)
+
+    # --- tamper-evident audit chain (opt-in: lint `verify_audit_chain`) ---
+    # Verifies the append-only log was not edited/reordered/deleted after the fact.
+    if lint.get('verify_audit_chain', False):
+        from . import chain as _chain
+        for e in _chain.verify_chain([ev for _, ev in audit_events]):
+            errors.append(f'audit chain: {e}')
+
+    # --- cryptographic authorship (opt-in: lint `verify_signatures`) ---
+    # Each signed event's `sig` must verify its `entry_hash` against the actor's
+    # registered ed25519 public key. A verification that cannot RUN (crypto not
+    # installed) is an error, never a silent pass.
+    actor_keys = lint.get('known_actor_keys', {}) if isinstance(lint.get('known_actor_keys'), dict) else {}
+    if lint.get('verify_signatures', False):
+        from . import signing as _signing
+        require_sig = bool(lint.get('require_signatures', False))
+        if not _signing.available():
+            errors.append('verify_signatures is on but the `cryptography` package is not installed '
+                          '(pip install "procheiron[crypto]") — refusing to pass unverifiable signatures')
+        else:
+            for lineno, ev in audit_events:
+                sig = ev.get('sig')
+                actor = str(ev.get('actor') or '')
+                entry = ev.get('entry_hash')
+                if not sig:
+                    if require_sig:
+                        errors.append(f'audit event line {lineno}: missing required signature (actor {actor!r})')
+                    continue
+                pub = actor_keys.get(actor)
+                if not pub:
+                    errors.append(f'audit event line {lineno}: signed by actor {actor!r} with no registered '
+                                  f'public key (known_actor_keys)')
+                elif not entry:
+                    errors.append(f'audit event line {lineno}: signature present but no entry_hash to sign over')
+                elif not _signing.verify(str(pub), str(entry), str(sig)):
+                    errors.append(f'audit event line {lineno}: signature does not verify for actor {actor!r} '
+                                  f'(forged, wrong key, or content altered)')
 
     promotion_events: Dict[str, List[Dict[str, Any]]] = {}
     for _, event in audit_events:

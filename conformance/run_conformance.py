@@ -105,11 +105,40 @@ def _t_tilde_weld(d: Path) -> None:
         fh.write("\nDeployed under ~/.local/share/vault/console on the host.\n")
 
 
+def _t_chain_break(d: Path) -> None:
+    # Edit a signed event's CONTENT without rechaining → entry_hash mismatch. Proves
+    # the tamper-evident audit chain catches a silent post-hoc edit (chain.verify_chain).
+    def fn(rows):
+        for r in rows:
+            if r.get("entry_hash"):
+                r["reason"] = (r.get("reason", "") + " [silently edited after signing]")
+                break
+        return rows
+    _edit_jsonl(d / "memory" / "index" / "audit.jsonl", fn)
+
+
+def _t_sig_forge(d: Path) -> None:
+    # Replace one signed event's `sig` with another event's signature (valid hex, wrong
+    # entry_hash). Chain still verifies (sig is outside the hashed content); the ed25519
+    # check does not — proves signature verification is real, not decorative.
+    def fn(rows):
+        sigs = [r.get("sig") for r in rows if r.get("sig")]
+        for r in rows:
+            if r.get("sig"):
+                other = next((s for s in sigs if s != r["sig"]), None)
+                if other:
+                    r["sig"] = other
+                    break
+        return rows
+    _edit_jsonl(d / "memory" / "index" / "audit.jsonl", fn)
+
+
 TAMPERS: Dict[str, Callable[[Path], None]] = {
     "secret": _t_secret, "missing-file": _t_missing_file, "absolute-path": _t_absolute_path,
     "active-without-review": _t_active_without_review, "self-reviewed": _t_self_reviewed,
     "prose-supersession": _t_prose_supersession, "dangling-token": _t_dangling_token,
     "weld": _t_weld, "tilde-weld": _t_tilde_weld,
+    "chain-break": _t_chain_break, "sig-forge": _t_sig_forge,
 }
 
 
@@ -156,6 +185,55 @@ def run_negative(tamper: str) -> Dict[str, Any]:
         return run_validator(dst)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
+
+
+# --------------------------------------------------------------- signature checks (crypto-gated)
+def _patch_lint(vault_root: Path, **flags: Any) -> None:
+    lp = vault_root / ".procheiron" / "profiles" / "meridian" / "lint.json"
+    lint = json.loads(lp.read_text(encoding="utf-8"))
+    lint.update(flags)
+    lp.write_text(json.dumps(lint, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+def run_signature_checks() -> List[Dict[str, Any]]:
+    """ed25519 signature verification needs the optional `cryptography` extra. When
+    present, prove the signed generic-vault verifies AND a forged signature is caught
+    (with verify_signatures turned on in a tempdir copy — the base lint enforces only
+    the stdlib hash chain). When absent, SKIP — never silently pass an unrun check."""
+    try:
+        import sys
+        sys.path.insert(0, str(HERE.parent / "src"))
+        from procheiron import signing
+        have = signing.available()
+    except Exception:  # noqa: BLE001
+        have = False
+    if not have:
+        return [{"name": "signatures (ed25519) — pip install procheiron[crypto] to run",
+                 "kind": "skip", "ok": True, "detail": "SKIPPED: cryptography not installed"}]
+    out: List[Dict[str, Any]] = []
+    for name, kind, tamper, want in [
+        ("signed audit log verifies (ed25519)", "pass", None, None),
+        ("forged signature on audit event", "fail", _t_sig_forge, "signature does not verify"),
+    ]:
+        tmp = Path(tempfile.mkdtemp(prefix="pk_sig_"))
+        try:
+            dst = tmp / "vault"
+            shutil.copytree(GENERIC, dst, ignore=shutil.ignore_patterns("__pycache__"))
+            _patch_lint(dst, verify_signatures=True, require_signatures=True)
+            if tamper:
+                tamper(dst)
+            r = run_validator(dst)
+            errs = " || ".join(r.get("errors", []) or [])
+            if kind == "pass":
+                ok = r.get("status") in ("PASS", "PASS_WITH_WARNINGS") and not r.get("errors")
+                detail = f"status={r.get('status')} errors={len(r.get('errors', []))}"
+            else:
+                ok = r.get("status") in ("FAIL", "CRASH") and want in errs
+                detail = f"status={r.get('status')} caught={want in errs}"
+            out.append({"name": name, "kind": kind, "ok": ok, "detail": detail})
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+    return out
 
 
 # --------------------------------------------------------------- doctrine currency
@@ -209,6 +287,7 @@ def main() -> int:
         result = run_minimal(root) if fx.get("validator") == "minimal" else run_validator(root)
         results.append(evaluate(fx, result))
 
+    results.extend(run_signature_checks())     # crypto-gated: ed25519 signatures (skips if no cryptography)
     results.append(check_doctrine_currency())  # shipped constitution must carry current doctrine
 
     passed = sum(1 for r in results if r["ok"])

@@ -40,20 +40,24 @@ supersede it cleanly. Procheiron makes the trustworthy path the easy one:
 Procheiron is **not** a memory engine and does not compete with one — it governs the records a store holds.
 The honest landscape (see the [competitive read](CLAIMS.md) for the long version):
 
-| System | What it does | Enforced independent-review gate? |
-|---|---|---|
-| Mem0 · supermemory · MemPalace · agentmemory | recall engines — embed, store, retrieve, per-user/agent scoping; Mem0 adds a per-memory change log | No |
-| Zep / Graphiti | bi-temporal knowledge graph with automatic episode→fact lineage (stronger *provenance* than Procheiron) | No |
-| **Procheiron** | no recall at all — an enforced `draft→validated→active` lifecycle where `active` requires review by a non-author plus a distinct authorizer | **Yes — the one thing none of them ship** |
+| System | What it does | Enforced independent-review gate? | Tamper-evident audit trail? |
+|---|---|---|---|
+| Mem0 · supermemory · MemPalace · agentmemory | recall engines — embed, store, retrieve, per-user/agent scoping; Mem0 adds a per-memory change log | No | No — a mutable history log |
+| Zep / Graphiti | bi-temporal knowledge graph with automatic episode→fact lineage | No | No — strong lineage, not tamper-evident |
+| **Procheiron** | no recall at all — an enforced `draft→validated→active` lifecycle where `active` requires review by a non-author plus a distinct authorizer | **Yes** — none of them ship this | **Yes** — hash-chained (stdlib) + optional ed25519 signing |
 
-Use a memory engine to *remember*; add Procheiron when *"who independently vetted this?"* has to be
-answerable. It rides on top of any of them.
+Use a memory engine to *remember*; add Procheiron when *"who independently vetted this, and has the record
+been tampered with since?"* has to be answerable. It rides on top of any of them.
 
-**Trust model, stated up front:** provenance is enforced by validation + an append-only audit log tied to
-declared actor identities — **not cryptographic signatures**. That raises the cost of forgery and gives a
-full audit trail, but a determined insider with write access to *both* the record store and the audit log
-can forge a self-consistent entry that validates. Cryptographic signing (ed25519 / Sigstore-style) is the
-top pre-1.0 item. Do not rely on this for a mutually-distrusting, cross-organization setting yet.
+**Trust model, stated up front:** the append-only audit log is **tamper-evident** — every event is
+hash-chained (BLAKE2b, pure stdlib), so you cannot silently edit, reorder, or delete a past event without
+breaking the chain. Anchor the head where the writer can't rewrite it (a git commit, an external log) and
+it is verifiable Rekor-style, with zero dependencies. Authorship can additionally be **cryptographically
+signed** — the optional `procheiron[crypto]` extra (ed25519) makes a forged event require the actor's
+private key, not just their name. Conformance proves both: a signed log verifies, a forged signature is
+caught. **Honest residual:** in a single-OS-user deployment, private keys sitting on the shared filesystem
+are only as strong as their file permissions — real cross-trust-domain non-repudiation needs separate key
+custody (separate OS users / HSM / Sigstore keyless). The hash chain's tamper-evidence holds regardless.
 
 ## What's in this repo
 
@@ -87,9 +91,13 @@ python3 init/procheiron_init.py --root ./my-commons
 
 ## Design choices worth knowing
 
-- **Zero runtime dependencies.** Every tool a live deployment runs is standard-library Python. (`jsonschema`,
-  `opa` etc. are used only for development/CI cross-checks, never required at runtime.) Adopt it without
-  taking on a dependency tree.
+- **Zero runtime dependencies (governance core).** Every tool a live deployment runs is standard-library
+  Python. Cryptographic signing is the one *optional* extra (`pip install "procheiron[crypto]"` → ed25519);
+  the tamper-evident hash chain needs no dependency at all. (`jsonschema`, `opa` are dev/CI cross-checks
+  only.) Adopt it without taking on a dependency tree.
+- **Tamper-evident by default, signed by choice.** The audit log is hash-chained in pure stdlib; ed25519
+  signatures are opt-in. A verification that cannot run (crypto not installed but signatures required) is a
+  hard error, never a silent pass — see `chain.py` / `signing.py`.
 - **Bring your own memory engine.** Procheiron governs records and their lifecycle; it does **not** do
   embeddings or retrieval and never will (that is the engine's job). Point it at any store.
 - **Core vs Profile.** The spec is portable Core. Deployment-specific bindings (identities, paths, a git
@@ -101,17 +109,19 @@ No vector/retrieval engine. No recall benchmarks — that is the memory engine's
 "production-replicable" until a second *real* deployment passes conformance (fixture-level proof is what
 exists today, and the README says exactly that).
 
-## Roadmap (next, post first-deployment feedback)
+## Roadmap
 
-1. **Cryptographic signing** — sign records + audit events (ed25519 minimum, or a Sigstore/transparency-log
-   style attestation) so provenance is *proven*, not asserted. This is the change that closes the
-   honor-system gap in the trust model above; it gates any cross-organization "trust" claim.
+1. ~~**Cryptographic trust** — a tamper-evident hash-chained audit log (stdlib) + optional ed25519 signing,
+   so the log can't be silently rewritten and authorship is provable. Conformance proves a signed log
+   verifies and a forged signature is caught.~~ **Shipped in v0.2.**
 2. **A second, independent real deployment** through conformance — the milestone that turns "single
-   deployment" from a caveat into proof.
+   deployment" from a caveat into proof. *(The biggest remaining gap.)*
 3. **A reference integration** — Procheiron governing a third-party memory engine (Mem0 / Zep / supermemory)
    end to end, shipped as an adapter.
-4. ~~PyPI / `pipx` packaging + one-command `procheiron init`; a config-resolved standalone MCP server
-   (`memory.search/get/propose/promote` + `boot_context`).~~ **Shipped in v0.1.**
+4. **Production key-custody guidance** — separate-OS-user / HSM / Sigstore-keyless patterns so signing gives
+   real non-repudiation in a single-machine deployment, not just across separate hosts.
+5. ~~PyPI / `pipx` packaging + one-command `procheiron init`; a config-resolved standalone MCP server.~~
+   **Shipped in v0.1.**
 
 ## License
 
