@@ -51,13 +51,21 @@ been tampered with since?"* has to be answerable. It rides on top of any of them
 
 **Trust model, stated up front:** the append-only audit log is **tamper-evident** — every event is
 hash-chained (BLAKE2b, pure stdlib), so you cannot silently edit, reorder, or delete a past event without
-breaking the chain. Anchor the head where the writer can't rewrite it (a git commit, an external log) and
-it is verifiable Rekor-style, with zero dependencies. Authorship can additionally be **cryptographically
-signed** — the optional `procheiron[crypto]` extra (ed25519) makes a forged event require the actor's
-private key, not just their name. Conformance proves both: a signed log verifies, a forged signature is
-caught. **Honest residual:** in a single-OS-user deployment, private keys sitting on the shared filesystem
-are only as strong as their file permissions — real cross-trust-domain non-repudiation needs separate key
-custody (separate OS users / HSM / Sigstore keyless). The hash chain's tamper-evidence holds regardless.
+breaking the chain. But `verify_chain` sees only *internal* continuity: a writer can rebuild the entire
+chain from scratch and it stays self-consistent. To catch that, **anchor the head externally** — pin the
+latest `entry_hash` in git and pass it to `validate --expect-head <hex>`; that makes the anchor a
+machine-checked input, not just advice. Authorship can additionally be **cryptographically signed**
+(optional `procheiron[crypto]`, ed25519): with `verify_signatures` + a `known_actor_keys` registry, an
+event from a keyed actor **must** carry that actor's signature — stripping it fails, it does not pass.
+Conformance proves it: a signed log verifies; a forged signature *and* a stripped signature are caught.
+
+**Honest residual (single trust domain).** The private keys *and* the public-key registry
+(`known_actor_keys`) live in the deployment's own tree. An insider who can write the audit log can, in
+principle, rebuild the chain *and* re-register fresh keys — so on one shared machine, signing adds little
+over the bare chain **unless both** (a) the head is externally anchored (`--expect-head`) **and** (b) the
+key registry is out of the writer's write scope (separate OS user / HSM / Sigstore keyless). Get those two
+right and a determined insider is stopped; miss either and you have tamper-*evidence* (detectable after the
+fact via the anchor), not tamper-*prevention*. See `CLAIMS.md` for the exact statement.
 
 ## What's in this repo
 

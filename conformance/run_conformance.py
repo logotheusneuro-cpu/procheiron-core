@@ -210,16 +210,28 @@ def run_signature_checks() -> List[Dict[str, Any]]:
     if not have:
         return [{"name": "signatures (ed25519) — pip install procheiron[crypto] to run",
                  "kind": "skip", "ok": True, "detail": "SKIPPED: cryptography not installed"}]
+    def _t_sig_strip(d: Path) -> None:
+        # Remove every signature. A keyed actor MUST sign, so `verify_signatures`
+        # ALONE (no require_signatures — the natural operator config) must still
+        # reject a stripped event rather than skip it.
+        def fn(rows):
+            for r in rows:
+                r.pop("sig", None)
+                r.pop("sig_key_id", None)
+            return rows
+        _edit_jsonl(d / "memory" / "index" / "audit.jsonl", fn)
+
     out: List[Dict[str, Any]] = []
-    for name, kind, tamper, want in [
-        ("signed audit log verifies (ed25519)", "pass", None, None),
-        ("forged signature on audit event", "fail", _t_sig_forge, "signature does not verify"),
+    for name, kind, patch, tamper, want in [
+        ("signed audit log verifies (ed25519)", "pass", {"verify_signatures": True, "require_signatures": True}, None, None),
+        ("forged signature on audit event", "fail", {"verify_signatures": True, "require_signatures": True}, _t_sig_forge, "signature does not verify"),
+        ("stripped signature caught by verify_signatures alone", "fail", {"verify_signatures": True}, _t_sig_strip, "is unsigned"),
     ]:
         tmp = Path(tempfile.mkdtemp(prefix="pk_sig_"))
         try:
             dst = tmp / "vault"
             shutil.copytree(GENERIC, dst, ignore=shutil.ignore_patterns("__pycache__"))
-            _patch_lint(dst, verify_signatures=True, require_signatures=True)
+            _patch_lint(dst, **patch)
             if tamper:
                 tamper(dst)
             r = run_validator(dst)

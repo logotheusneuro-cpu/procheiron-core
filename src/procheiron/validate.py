@@ -26,16 +26,23 @@ All new lint keys default off/absent, so existing profile lints
 (portable-strict, demo-generic) behave exactly as before.
 
 THREAT MODEL (read before trusting record validation):
-This is honor-system detection, NOT cryptographic tamper-evidence. Record
-validation corroborates an active/validated record against a promotion event in
-audit.jsonl, and ties that event's actor to the named reviewer and the actor
-registry — which catches naive forgery, hand-flipped status, self-review, and
-confused-agent errors. It does NOT defeat an adversary with write access to BOTH
-memories.jsonl and audit.jsonl who forges a fully self-consistent record + event
-naming a real registered reviewer. Closing that gap requires a hash-chained or
-signed audit log and identity binding — roadmap Phase 3 (3.2 policy-as-code,
-3.5 MCP). Do not describe this validator as preventing forged records; it
-detects the cheap forgeries and raises the cost of the rest.
+Record validation corroborates an active/validated record against a promotion
+event in audit.jsonl, and ties that event's actor to the named reviewer and the
+actor registry — catching naive forgery, hand-flipped status, self-review, and
+confused-agent errors. With `verify_audit_chain` on, the audit log is also
+tamper-EVIDENT (chain.py): a silent edit/insert/delete/reorder of a past event
+breaks the hash chain. With `verify_signatures` + `known_actor_keys`, forging an
+event additionally requires the actor's ed25519 private key.
+BUT this is a SINGLE-TRUST-DOMAIN model. An adversary with write access to the
+audit log can rebuild the whole chain from GENESIS (verify_chain sees only
+internal continuity), and — because `known_actor_keys` lives in the same writable
+profile — can also swap the registered public keys and re-sign the rewrite. So
+chain + signing close the dual-write forgery ONLY when BOTH (a) the chain head is
+externally anchored (validate `--expect-head <hex>`, git-pinned) AND (b) the key
+registry is out of the writer's write scope (separate OS user / HSM / Sigstore
+keyless). On their own, in one trust domain, they raise the cost but do not
+prevent a determined insider. Do not describe this validator as preventing forged
+records absent those two out-of-band anchors.
 """
 from __future__ import annotations
 
@@ -344,6 +351,7 @@ def validate_memory_records(cfg: Any, lint: Dict[str, Any], errors: List[str],
     actor_keys = lint.get('known_actor_keys', {}) if isinstance(lint.get('known_actor_keys'), dict) else {}
     if lint.get('verify_signatures', False):
         from . import signing as _signing
+        from . import chain as _chain
         require_sig = bool(lint.get('require_signatures', False))
         if not _signing.available():
             errors.append('verify_signatures is on but the `cryptography` package is not installed '
@@ -352,20 +360,50 @@ def validate_memory_records(cfg: Any, lint: Dict[str, Any], errors: List[str],
             for lineno, ev in audit_events:
                 sig = ev.get('sig')
                 actor = str(ev.get('actor') or '')
-                entry = ev.get('entry_hash')
+                key_id = ev.get('sig_key_id')
+                # sig_key_id is unauthenticated (hash-excluded) — it must not name a
+                # different signer than the actor whose key is actually checked.
+                if key_id is not None and str(key_id) != actor:
+                    errors.append(f'audit event line {lineno}: sig_key_id {str(key_id)!r} != actor {actor!r} '
+                                  f'(the signer identity must be the acting actor)')
                 if not sig:
-                    if require_sig:
+                    # An actor with a REGISTERED key is declared to sign; an unsigned
+                    # event from them is a stripped/forged entry, not an opt-out — so
+                    # `verify_signatures` alone (no require_signatures) still can't be
+                    # bypassed by dropping the sig. require_signatures additionally
+                    # demands a signature from every actor, keyed or not.
+                    if actor in actor_keys:
+                        errors.append(f'audit event line {lineno}: actor {actor!r} has a registered signing key '
+                                      f'but this event is unsigned (signature stripped or never applied)')
+                    elif require_sig:
                         errors.append(f'audit event line {lineno}: missing required signature (actor {actor!r})')
                     continue
                 pub = actor_keys.get(actor)
                 if not pub:
                     errors.append(f'audit event line {lineno}: signed by actor {actor!r} with no registered '
                                   f'public key (known_actor_keys)')
-                elif not entry:
-                    errors.append(f'audit event line {lineno}: signature present but no entry_hash to sign over')
-                elif not _signing.verify(str(pub), str(entry), str(sig)):
+                    continue
+                # Verify over the entry_hash RECOMPUTED from content, not the stored one:
+                # a stored entry_hash is attacker-controlled, so signing it would bind
+                # nothing when verify_audit_chain is off. Recomputing ties the signature
+                # to the actual event body independently of the chain check.
+                recomputed = _chain.entry_hash(str(ev.get('prev_hash') or _chain.GENESIS), ev)
+                if not _signing.verify(str(pub), recomputed, str(sig)):
                     errors.append(f'audit event line {lineno}: signature does not verify for actor {actor!r} '
                                   f'(forged, wrong key, or content altered)')
+
+    # --- external head anchor (opt-in: --expect-head) ---
+    # verify_chain checks internal continuity only; a writer can rebuild the whole
+    # chain from GENESIS and it stays self-consistent. An externally-anchored head
+    # (git-pinned digest, printed value) is the ONLY thing that detects a full
+    # rechain — this makes that anchor a machine-checked input, not just prose.
+    expect_head = lint.get('_expect_head')
+    if expect_head:
+        from . import chain as _chain
+        actual_head = _chain.head([ev for _, ev in audit_events])
+        if str(expect_head) != actual_head:
+            errors.append(f'audit chain head {actual_head[:12]}… != expected {str(expect_head)[:12]}… '
+                          f'(the log was rebuilt/rewritten, or the anchor is stale)')
 
     promotion_events: Dict[str, List[Dict[str, Any]]] = {}
     for _, event in audit_events:
@@ -683,6 +721,16 @@ def validate(args: argparse.Namespace) -> Dict[str, Any]:
         records_enabled = True
     if args.no_records:
         records_enabled = False
+    # External anchors (opt-in): a downgraded/flipped lint and a full audit-chain
+    # rewrite are both invisible to internal checks — pin them from outside CI/git.
+    if getattr(args, 'expect_lint', None):
+        actual_fp = _lint_fingerprint(lint)
+        if actual_fp != args.expect_lint:
+            errors.append(f'lint fingerprint {actual_fp} != expected {args.expect_lint} '
+                          '(enforcement-bearing lint keys were changed — possible downgrade)')
+    if getattr(args, 'expect_head', None):
+        lint = {**lint, '_expect_head': args.expect_head}
+
     record_summary: Dict[str, Any] = {'checked': False}
     if records_enabled:
         record_summary = validate_memory_records(cfg, lint, errors, warnings)
@@ -747,6 +795,10 @@ def main(argv: Optional[List[str]] = None) -> int:
                         help='skip memory-record validation regardless of profile lint')
     parser.add_argument('--strict-lint-presence', action='store_true',
                         help='FAIL (not warn) when a named profile has no lint file')
+    parser.add_argument('--expect-head',
+                        help='hex the audit-chain head MUST equal (external anchor; catches a full rechain)')
+    parser.add_argument('--expect-lint',
+                        help='lint fingerprint the profile MUST match (catches a downgraded/flipped lint)')
     parser.add_argument('--json', action='store_true')
     args = parser.parse_args(argv)
     try:
