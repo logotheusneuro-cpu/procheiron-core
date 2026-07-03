@@ -257,6 +257,27 @@ def run_signature_checks() -> List[Dict[str, Any]]:
 DOCTRINE_MARKERS = ("## 13. Preservation executor policy", "Core does not require git")
 
 
+def check_version_consistency() -> Dict[str, Any]:
+    """Guard the two version sources — pyproject `version` and package __version__ —
+    against drift (they diverged once: pyproject 0.2.0 vs __init__ 0.1.0, so
+    `procheiron version` lied). No build dep: regex the pyproject line, import the
+    package. Fails loud if they disagree."""
+    import re
+    import sys
+    pyproj = (HERE.parent / "pyproject.toml").read_text(encoding="utf-8")
+    m = re.search(r'(?m)^version\s*=\s*"([^"]+)"', pyproj)
+    proj_v = m.group(1) if m else None
+    sys.path.insert(0, str(HERE.parent / "src"))
+    try:
+        from procheiron import __version__ as pkg_v
+    except Exception as exc:  # noqa: BLE001
+        pkg_v = f"<import failed: {exc}>"
+    ok = proj_v is not None and proj_v == pkg_v
+    detail = (f"pyproject {proj_v} == package {pkg_v}" if ok
+              else f"VERSION DRIFT — pyproject={proj_v} vs package __version__={pkg_v}")
+    return {"name": "version consistency (pyproject vs __version__)", "kind": "guard", "ok": ok, "detail": detail}
+
+
 def check_doctrine_currency() -> Dict[str, Any]:
     pol = GENERIC / "console" / "SELF_ACTION_POLICY.md"
     text = pol.read_text(encoding="utf-8") if pol.is_file() else ""
@@ -300,6 +321,7 @@ def main() -> int:
         results.append(evaluate(fx, result))
 
     results.extend(run_signature_checks())     # crypto-gated: ed25519 signatures (skips if no cryptography)
+    results.append(check_version_consistency())  # pyproject version must match package __version__
     results.append(check_doctrine_currency())  # shipped constitution must carry current doctrine
 
     passed = sum(1 for r in results if r["ok"])
