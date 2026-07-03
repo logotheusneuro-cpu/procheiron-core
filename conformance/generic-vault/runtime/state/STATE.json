@@ -1,0 +1,10 @@
+{
+  "profile": "meridian",
+  "deployment": "meridian-atelier",
+  "last_heartbeat": "2026-06-12T14:00:00Z",
+  "status": "nominal",
+  "active_projects": ["PROJ-2026-000", "PROJ-2026-001"],
+  "pending_approvals": [],
+  "blockers": ["BLK-001", "BLK-002"],
+  "notes": "Initial deployment state. Do not index this file."
+}

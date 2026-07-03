@@ -1,0 +1,44 @@
+{
+  "profile": "meridian",
+  "expected_profile": "meridian",
+  "lint_level": "profile_specific",
+  "forbid_absolute_paths_in_core": false,
+  "core_docs": [
+    "PROCHEIRON.md",
+    "PRECEDENCE.md",
+    "AGENT_BOOT.md",
+    "SOURCE_OF_TRUTH.md",
+    "AGENT_REGISTRY.md",
+    "SELF_ACTION_POLICY.md",
+    "RETRIEVAL_POLICY.md"
+  ],
+  "forbid_absolute_paths_in_core_docs": true,
+  "forbidden_core_doc_literals": [
+    "MeridianAtelier",
+    "meridian-atelier.local",
+    "dana_okoro",
+    "atlas_drafter",
+    "vera_curator"
+  ],
+  "required_console_extra": [
+    "SELF_ACTION_POLICY.md",
+    "RETRIEVAL_POLICY.md"
+  ],
+  "deprecated_or_duplicate_roots": [],
+  "required_literals": [],
+  "forbidden_core_literals": [],
+  "validate_memory_records": true,
+  "forbid_absolute_paths_in_memory_records": true,
+  "known_actors": [
+    "atlas_drafter",
+    "vera_curator",
+    "dana_okoro",
+    "atlas_review_bot",
+    "vera_ingest_bot"
+  ],
+  "known_actor_groups": [
+    ["atlas_drafter", "atlas_review_bot"],
+    ["vera_curator", "vera_ingest_bot"]
+  ],
+  "note": "Meridian Atelier deployment lint — conformance test profile. Constitutional authority: Dana Okoro. Actor groups are separated so cross-group review is possible between the atlas_* cluster and the vera_* cluster."
+}

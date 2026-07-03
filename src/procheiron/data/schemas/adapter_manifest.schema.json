@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://procheiron.dev/schemas/v0.1/adapter_manifest.schema.json",
+  "title": "Procheiron adapter record (adapters.jsonl)",
+  "description": "One JSON object per non-empty line of {paths.memory}/index/adapters.jsonl — the machine-readable adapter registry. adapter_id values feed the validator's known_actors set (validate_procheiron2 lines 319-323). Mirrors _memory/SCHEMA.md 'Adapter Manifest Schema' plus the description/read-root fields the live registry carries. NOTE: read_roots in the live registry currently hold machine-absolute paths; the validator does not flag adapter paths today, so absolute read_roots are severity=warning (see severity_map.json and required_tokens.json — a future migration tokenizes them).",
+  "type": "object",
+  "required": ["adapter_id", "agent_or_runtime", "capabilities", "declared_at", "declared_by"],
+  "additionalProperties": false,
+  "properties": {
+    "adapter_id": { "type": "string", "minLength": 1, "pattern": "^[a-z0-9][a-z0-9_]*$" },
+    "agent_or_runtime": { "type": "string", "minLength": 1, "description": "Deployment-specific id; abstract in Core, concrete in the profile." },
+    "description": { "type": "string" },
+    "capabilities": {
+      "type": "array",
+      "items": { "enum": ["read", "draft", "validate", "promote", "scaffold", "external"] },
+      "minItems": 1
+    },
+    "read_roots": { "type": "array", "items": { "type": "string" }, "default": [] },
+    "write_roots": { "type": "array", "items": { "type": "string" }, "default": [] },
+    "forbidden_actions": { "type": "array", "items": { "type": "string" }, "default": [] },
+    "sensitivity_ceiling": { "enum": ["public", "internal", "confidential", "restricted", "secret_ref"] },
+    "external_action_authority": { "type": "boolean", "default": false },
+    "promotion_authority": { "type": "boolean", "default": false },
+    "declared_at": { "type": "string", "minLength": 1 },
+    "declared_by": { "type": "string", "minLength": 1 }
+  }
+}

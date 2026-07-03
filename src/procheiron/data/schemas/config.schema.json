@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://procheiron.dev/schemas/v0.1/config.schema.json",
+  "title": "Procheiron deployment config (.procheiron/config.yaml)",
+  "description": "The deployment binding read by procheiron_resolve.load_config. Defines every {paths.<key>} token, the active profile, and (through the profile) the constitutional-authority mapping. This file is SELF_ACTION_POLICY §12-protected. Validate by parsing the YAML to JSON first. The set of tokens that MUST be present is the union of tokens referenced by the parameterized Core doc set — see required_tokens.json (A2-37 dangling-token closure). additionalProperties on paths is true so a deployment may add tokens; the required list pins the ones Core references.",
+  "type": "object",
+  "required": ["version", "profile", "root", "paths", "policy_defaults"],
+  "additionalProperties": true,
+  "properties": {
+    "version": {
+      "anyOf": [ { "type": "string" }, { "type": "number" } ],
+      "description": "Spec/profile schema version, e.g. 0.1."
+    },
+    "profile": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Active deployment profile name; must match a directory under .procheiron/profiles/<profile>/ and the lint's expected_profile."
+    },
+    "root": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Deployment root. The resolved run-time root (most-explicit-wins) remains authoritative; mismatches are surfaced, not silently honored."
+    },
+    "paths": {
+      "type": "object",
+      "additionalProperties": { "type": "string", "minLength": 1 },
+      "required": ["console", "memory", "sources", "wiki", "outputs", "adapters", "runtime_root", "runtime_state", "legacy_governance", "workspace", "scripts"],
+      "description": "Token map. Relative values resolve under root; absolute values are used as-is. The required keys are exactly the tokens the parameterized Core docs reference (see required_tokens.json)."
+    },
+    "policy_defaults": {
+      "type": "object",
+      "additionalProperties": { "type": ["boolean", "string", "number"] },
+      "description": "Deployment policy flags (local_first, provenance_required, agents_may_propose_not_promote, secrets_allowed, ...). Booleans expected.",
+      "properties": {
+        "secrets_allowed": {
+          "const": false,
+          "description": "Must be false: secrets never belong in the commons (SCHEMA rule 8; AGENT_BOOT §5)."
+        },
+        "agents_may_propose_not_promote": {
+          "const": true,
+          "description": "The core self-evolving-not-self-authorizing invariant."
+        }
+      }
+    }
+  }
+}

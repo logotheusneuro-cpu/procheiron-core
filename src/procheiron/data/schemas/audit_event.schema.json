@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://procheiron.dev/schemas/v0.1/audit_event.schema.json",
+  "title": "Procheiron audit event",
+  "description": "One JSON object per non-empty line of {paths.memory}/index/audit.jsonl. The audit log is heterogeneous and append-only: it carries compact propose-helper events, full promotion/lifecycle events, proposal/gate/containment events, and migration events. additionalProperties is intentionally true (the log must accept new event shapes without a schema bump). The live validator does NOT field-check audit events today; this schema is therefore advisory (severity=warning) EXCEPT the promotion-family constraint, which backs the active/validated corroboration check. See severity_map.json.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["actor"],
+  "properties": {
+    "id": { "type": "string" },
+    "event_id": { "type": "string" },
+    "event_type": { "type": "string" },
+    "action": { "type": "string" },
+    "profile": { "type": "string" },
+    "actor": { "type": "string", "minLength": 1 },
+    "memory_id": { "type": "string" },
+    "status_before": { "type": "string" },
+    "status_after": { "type": "string" },
+    "reviewer_role": { "type": "string" },
+    "reason": { "type": "string" },
+    "tool": { "type": "string" },
+    "authorized_by": { "type": ["string", "null"] },
+    "authorization_ref": { "type": "string" },
+    "superseded_by": { "type": ["string", "null"] },
+    "write_policy": { "type": "string" },
+    "index_dir": { "type": "string" },
+    "timestamp": { "type": "string" },
+    "created_at": { "type": "string" },
+    "at": { "type": "string" },
+    "ts": { "type": "string" },
+    "source_paths": { "type": "array", "items": { "type": "string" } },
+    "provenance_paths": { "type": "array", "items": { "type": "string" } },
+    "target_paths": { "type": "array", "items": { "type": "string" } },
+    "proposed_memory_ids": { "type": "array", "items": { "type": "string" } },
+    "status": { "type": "string" },
+    "paths_normalized": { "type": "integer" },
+    "supersessions_repaired": { "type": "integer" },
+    "needs_manual_promote": { "type": "integer" },
+    "profile_mismatches": { "type": "integer" },
+    "notes": { "type": "string" }
+  },
+  "anyOf": [
+    { "required": ["created_at"] },
+    { "required": ["timestamp"] },
+    { "required": ["at"] },
+    { "required": ["ts"] }
+  ],
+  "allOf": [
+    {
+      "$comment": "Either action or event_type names the event kind.",
+      "anyOf": [
+        { "required": ["action"] },
+        { "required": ["event_type"] }
+      ]
+    },
+    {
+      "$comment": "Promotion family: a memory_promoted/memory_validated event must independently corroborate a record — it needs the target memory_id and the resulting status (validate_procheiron2 event_supports, lines 344-366).",
+      "if": {
+        "properties": { "action": { "enum": ["memory_promoted", "memory_validated"] } },
+        "required": ["action"]
+      },
+      "then": {
+        "required": ["memory_id", "status_after", "actor"],
+        "properties": {
+          "memory_id": { "type": "string", "minLength": 1 },
+          "status_after": { "enum": ["active", "validated"] }
+        }
+      }
+    }
+  ]
+}

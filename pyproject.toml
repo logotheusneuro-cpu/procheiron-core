@@ -1,0 +1,18 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "procheiron"
+version = "0.1.0"
+description = "Governance and provenance layer for agent memory."
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.9"
+dependencies = []
+
+[project.scripts]
+procheiron = "procheiron.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/procheiron"]

@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://procheiron.dev/schemas/v0.1/supersession.schema.json",
+  "title": "Procheiron supersession lineage entry",
+  "description": "One JSON object per non-empty line of {paths.memory}/index/supersessions.jsonl — append-only structured lineage. The validator reads old_id/new_id (with legacy aliases superseded_id/superseding_id) to corroborate structured supersedes[] claims (validate_procheiron2 lines 368-375). memory_promote.py writes the canonical old_id/new_id/at/actor/reason form.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "id": { "type": "string", "minLength": 1 },
+    "old_id": { "type": "string", "pattern": "^mem_" },
+    "new_id": { "type": "string", "pattern": "^mem_" },
+    "superseded_id": { "type": "string", "pattern": "^mem_", "description": "Legacy alias for old_id (validator accepts both)." },
+    "superseding_id": { "type": "string", "pattern": "^mem_", "description": "Legacy alias for new_id." },
+    "at": { "type": "string", "minLength": 1 },
+    "actor": { "type": "string", "minLength": 1 },
+    "reason": { "type": "string" }
+  },
+  "allOf": [
+    {
+      "$comment": "An old_id is required, under either the canonical key or the legacy alias.",
+      "anyOf": [
+        { "required": ["old_id"] },
+        { "required": ["superseded_id"] }
+      ]
+    },
+    {
+      "$comment": "A new_id is required, under either the canonical key or the legacy alias.",
+      "anyOf": [
+        { "required": ["new_id"] },
+        { "required": ["superseding_id"] }
+      ]
+    }
+  ]
+}

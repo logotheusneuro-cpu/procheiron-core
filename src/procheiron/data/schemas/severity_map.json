@@ -1,0 +1,53 @@
+{
+  "$comment": "Behavior-preservation mapping for the validator-consumes-schemas adoption (3.1). The live validate_procheiron2.py grades some field problems as ERROR and others as WARNING. A naive 'schema fails => error' swap would change behavior: it would turn today's warnings (non-standard type/scope, unknown created_by, length overflow) into hard FAILs and would newly hard-fail audit-event field shapes the validator never checked. To preserve exact current semantics, the consuming validator downgrades the schema-failure paths listed here to warnings; everything else schema-fails as error. Each entry cites the live validator behavior it preserves.",
+  "schema_version": "0.1",
+  "default_severity": "error",
+  "warning_paths": {
+    "memory_record.schema.json": {
+      "/properties/id/pattern": "validator does not check id shape (only emptiness + duplicate)",
+      "/properties/type/enum": "validate_procheiron2 line 401: non-standard type => warning",
+      "/properties/scope/enum": "line 404: non-standard scope => warning",
+      "/properties/statement/maxLength": "validator does not bound statement length (memory_propose does, at write time)",
+      "/properties/valid_from/pattern": "validator does not check date format",
+      "/properties/valid_until/pattern": "validator does not check date format",
+      "/additionalProperties": "validator tolerates unknown fields; forward-compat => warning",
+      "/properties/supersedes/items/pattern": "validator checks target existence, not id shape"
+    },
+    "audit_event.schema.json": {
+      "*": "the live validator does NOT field-check audit events at all (it only requires valid JSON objects and reads recognized keys). Every audit_event schema failure is a warning, EXCEPT the promotion-family branch below, which backs a real validator error indirectly.",
+      "!keep_error": ["/allOf/2/then"]
+    },
+    "adapter_manifest.schema.json": {
+      "/properties/read_roots/items": "live adapters.jsonl read_roots are machine-absolute; validator does not flag adapter paths => warning until a future tokenizing migration",
+      "/properties/write_roots/items": "same",
+      "/additionalProperties": "forward-compat"
+    },
+    "source_record.schema.json": {
+      "*": "no live source records exist yet; the whole schema is a forward contract. Until capturers populate _sources, source-record failures are warnings."
+    },
+    "manifest.schema.json": {
+      "/additionalProperties": "YAML manifests are deliberately free-form per deployment",
+      "/properties/external_action_authority": "validator coerces non-true strings to false"
+    },
+    "config.schema.json": {
+      "/properties/paths/required": "the dangling-token closure (required_tokens.json) is the authoritative token check; a missing OPTIONAL path that no doc references is a warning. Missing console/memory/sources stays error (resolver + validator already hard-require those)."
+    },
+    "profile_lint.schema.json": {}
+  },
+  "always_error": {
+    "$comment": "Paths that MUST stay error regardless of the above, because the live validator already errors on them.",
+    "memory_record.schema.json": [
+      "/required",
+      "/properties/status/enum",
+      "/properties/sensitivity/enum",
+      "/properties/visibility/enum",
+      "/properties/confidence",
+      "/properties/reviewed_by/type",
+      "/allOf"
+    ],
+    "config.schema.json": [
+      "/properties/profile",
+      "/properties/policy_defaults/properties/secrets_allowed"
+    ]
+  }
+}

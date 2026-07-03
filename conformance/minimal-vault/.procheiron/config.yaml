@@ -1,0 +1,6 @@
+version: "0.1"
+profile: lumen
+root: .
+paths:
+  console: console
+  memory: memory

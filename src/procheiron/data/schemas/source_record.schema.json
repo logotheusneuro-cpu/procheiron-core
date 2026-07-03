@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://procheiron.dev/schemas/v0.1/source_record.schema.json",
+  "title": "Procheiron source record",
+  "description": "Metadata for an immutable raw source captured under {paths.sources}/. Mirrors _memory/SCHEMA.md 'Source Record Schema'. Raw sources are append-only/immutable once captured (AGENT_BOOT §3, §5). No live source records exist yet (the _sources/ tree is scaffold), so this is a forward contract; the materializer (3.4) and capturers consume it.",
+  "type": "object",
+  "required": ["source_id", "source_type", "origin", "source_path", "captured_at", "captured_by"],
+  "additionalProperties": false,
+  "properties": {
+    "source_id": {
+      "type": "string",
+      "pattern": "^src_[0-9]{8}_[a-z0-9][a-z0-9_]*$",
+      "description": "src_YYYYMMDD_slug[_uuid]. Pattern advisory."
+    },
+    "source_type": {
+      "enum": ["session", "message", "email", "meeting", "github", "web", "file", "other"]
+    },
+    "origin": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Local path, export name, or connector label."
+    },
+    "source_path": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Root-relative or {paths.sources}/... token form; machine-absolute discouraged (same data-plane weld class as memory source_paths)."
+    },
+    "captured_at": { "type": "string", "minLength": 1, "description": "ISO-8601." },
+    "captured_by": { "type": "string", "minLength": 1 },
+    "sha256": {
+      "type": ["string", "null"],
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "Hex digest of the raw bytes, or null. Enables the materializer to prove source integrity."
+    },
+    "redaction_status": {
+      "enum": ["none", "required", "redacted", "metadata_only"]
+    },
+    "sensitivity": {
+      "enum": ["public", "internal", "confidential", "restricted", "secret_ref"]
+    },
+    "permissions": {
+      "type": "string",
+      "description": "Who may read/use this source."
+    },
+    "notes": { "type": "string" }
+  }
+}

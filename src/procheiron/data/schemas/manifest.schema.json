@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://procheiron.dev/schemas/v0.1/manifest.schema.json",
+  "title": "Procheiron adapter manifest file (.procheiron/manifests/*.yaml)",
+  "description": "The richer per-adapter YAML manifest staged under {root}/.procheiron/manifests/. These are deliberately free-form per deployment (the claude_cowork manifest carries cowork-specific write-root keys), so additionalProperties is true. The validator (check_manifests, validate_procheiron2 lines 254-291) only reads adapter_id, status, promotion_authority, external_action_authority, and couples status to the filename: a *.proposed.yaml must NOT declare status active, and an active or authority-granting manifest must be allowlisted. Those filename/allowlist couplings are cross-file checks (validator-supplemented), not expressible here. Validate by parsing the YAML to JSON first.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["adapter_id", "status"],
+  "properties": {
+    "adapter_id": { "type": "string", "minLength": 1, "pattern": "^[a-z0-9][a-z0-9_]*$" },
+    "agent_or_runtime": { "type": "string" },
+    "profile": { "type": "string" },
+    "role": { "type": "string" },
+    "trust_level": {
+      "type": "string",
+      "description": "Should map to an AGENT_REGISTRY trust level family (read_only | draft_writer | scaffold_writer | canonical_writer | external_actor); deployments may suffix-qualify (e.g. draft_writer_profile_writer_with_narrow_roots)."
+    },
+    "status": {
+      "enum": ["proposed", "draft", "candidate", "active", "superseded", "archived"],
+      "description": "A manifest in a *.proposed.yaml file must not be 'active' unless allowlisted (validator-supplemented)."
+    },
+    "purpose": { "type": "string" },
+    "promotion_authority": {
+      "anyOf": [
+        { "type": "boolean" },
+        { "type": "string" },
+        { "type": "object" }
+      ],
+      "description": "Boolean true is the only value the validator treats as granting promotion authority (and triggering the allowlist requirement). A nested mapping or descriptive string reads as false in the validator's flat line-parse (manifest_fields)."
+    },
+    "external_action_authority": {
+      "anyOf": [
+        { "type": "boolean" },
+        { "type": "string" },
+        { "type": "object" }
+      ],
+      "description": "Live manifests carry this as a descriptive string ('ask_first_...') OR a nested mapping (default/proactive_external_actions sub-keys). The validator's flat parse reads the parent key's empty value as false; only a literal boolean true grants authority and triggers the allowlist requirement."
+    }
+  }
+}

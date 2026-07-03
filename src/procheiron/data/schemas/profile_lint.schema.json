@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://procheiron.dev/schemas/v0.1/profile_lint.schema.json",
+  "title": "Procheiron profile lint (.procheiron/profiles/<profile>/lint.json)",
+  "description": "The machine-readable half of a deployment profile (the prose half is profile.md; its required sections are documented in README.md). Mirrors validate_procheiron2.load_profile_lint + check_lint_schema (lines 141-166) and every lint key the validator consults. Lint definitions are gate-class surfaces (SELF_ACTION_POLICY §12): relaxing or removing a check is a canonical governance edit requiring an L4 DECISIONS.md record. Today a malformed-but-valid-JSON lint is caught by check_lint_schema's type checks; this schema makes that contract explicit and oracle-checkable.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["profile"],
+  "properties": {
+    "profile": { "type": "string", "minLength": 1 },
+    "expected_profile": {
+      "type": "string",
+      "description": "If set, must equal the active profile or the validator errors (line 507)."
+    },
+    "lint_level": { "type": "string" },
+    "forbid_absolute_paths_in_core": { "type": "boolean" },
+    "forbid_absolute_paths_in_core_docs": { "type": "boolean" },
+    "forbid_absolute_paths_in_memory_records": { "type": "boolean" },
+    "validate_memory_records": { "type": "boolean" },
+    "core_docs": { "type": "array", "items": { "type": "string" } },
+    "required_console_extra": { "type": "array", "items": { "type": "string" } },
+    "deprecated_or_duplicate_roots": { "type": "array", "items": { "type": "string" } },
+    "required_literals": { "type": "array", "items": { "type": "string" } },
+    "forbidden_core_literals": { "type": "array", "items": { "type": "string" } },
+    "forbidden_core_doc_literals": { "type": "array", "items": { "type": "string" } },
+    "known_actors": { "type": "array", "items": { "type": "string" } },
+    "known_actor_groups": {
+      "type": "array",
+      "items": { "type": "array", "items": { "type": "string" } },
+      "description": "Each entry is itself a list of actor ids that share a harness (authority-laundering guard)."
+    },
+    "note": { "type": "string" }
+  }
+}

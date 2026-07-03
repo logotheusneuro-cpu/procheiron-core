@@ -1,0 +1,28 @@
+{
+  "$comment": "Conformance fixtures + declared verdicts. run_conformance.py runs the same reference validator against each. 'pass' fixtures (generic-vault, minimal-vault) are stored complete deployments. 'fail' fixtures declare a `tamper`: the runner copies the generic vault to a tempdir, applies that single tamper, validates, and discards it — so no duplicated trees and no secret-shaped strings live in the repo. expect_reasons are matched against the package validator's (procheiron.validate) actual error strings.",
+  "spec_version": "0.1",
+  "fixtures": [
+    {
+      "name": "generic-vault (Meridian Atelier)",
+      "root": "generic-vault",
+      "kind": "pass",
+      "note": "FULL-CONTENT second deployment: same parameterized Core + reference impl, different config/profile/records/authority. The real 'second deployment passes conformance' proof."
+    },
+    {
+      "name": "minimal-vault (5-file v0.1)",
+      "root": "minimal-vault",
+      "kind": "pass",
+      "validator": "minimal",
+      "note": "smallest passing tree — validated by the 5-file adopter's own minimal validator, not the full reference."
+    },
+    {"name": "neg: secret in tree", "kind": "fail", "tamper": "secret", "expect_reasons": ["secret-pattern finding"]},
+    {"name": "neg: missing required file", "kind": "fail", "tamper": "missing-file", "expect_reasons": ["missing console file"]},
+    {"name": "neg: machine-absolute path in record", "kind": "fail", "tamper": "absolute-path", "expect_reasons": ["machine-absolute source_path"]},
+    {"name": "neg: active record without independent review", "kind": "fail", "tamper": "active-without-review", "expect_reasons": ["no corroborating promotion audit event"]},
+    {"name": "neg: self-reviewed promotion", "kind": "fail", "tamper": "self-reviewed", "expect_reasons": ["self-reviewed by its creator"]},
+    {"name": "neg: prose supersession without structured supersedes", "kind": "fail", "tamper": "prose-supersession", "expect_reasons": ["prose supersession claim without structured supersedes"]},
+    {"name": "neg: dangling config token", "kind": "fail", "tamper": "dangling-token", "expect_reasons": ["dangling token"]},
+    {"name": "neg: deployment literal welded into Core doc", "kind": "fail", "tamper": "weld", "expect_reasons": ["deployment weld in Core doc"]},
+    {"name": "neg: tilde-home path welded into Core doc", "kind": "fail", "tamper": "tilde-weld", "expect_reasons": [":absolute-path"]}
+  ]
+}

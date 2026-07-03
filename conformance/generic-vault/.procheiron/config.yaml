@@ -1,0 +1,29 @@
+version: 0.1
+profile: meridian
+root: .
+paths:
+  console: console
+  memory: memory
+  sources: sources
+  wiki: knowledge
+  outputs: outputs
+  adapters: adapters
+  legacy_governance: studio
+  workspace: workspace
+  runtime_root: runtime/procheiron
+  runtime_state: runtime/state/STATE.json
+  scripts: scripts
+policy_defaults:
+  local_first: true
+  human_visible: true
+  raw_sources_immutable: true
+  derived_memory_rebuildable: true
+  provenance_required: true
+  temporal_by_default: true
+  no_runtime_lock_in: true
+  no_external_actions_by_default: true
+  no_hooks_phase_1_2: true
+  no_cron_changes_phase_1_2: true
+  no_package_installs_phase_1_2: true
+  agents_may_propose_not_promote: true
+  secrets_allowed: false

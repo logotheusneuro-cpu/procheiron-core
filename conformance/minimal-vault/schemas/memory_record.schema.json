@@ -1,0 +1,135 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://procheiron.dev/schemas/v0.1/memory_record.schema.json",
+  "title": "Procheiron memory record",
+  "description": "One JSON object per non-empty line of {paths.memory}/index/memories.jsonl. This schema is the single-record contract. Cross-record checks (duplicate id, corroborating promotion audit event, self-review, supersession-pair consistency, known-actor membership) are NOT expressible in JSON Schema and remain in the consuming validator (see ../staged_diffs/validator_consumes_schemas.staged.md and severity_map.json). Mirrors validate_procheiron2.py constants and memory_propose.py write contract as of 2026-06-12.",
+  "type": "object",
+  "required": ["id", "type", "scope", "profile", "subject", "statement", "status", "confidence", "created_at", "created_by"],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^mem_[0-9]{8}_[a-z0-9][a-z0-9_]*$",
+      "description": "mem_YYYYMMDD_slug[_digest]. Pattern is advisory (validator does not currently enforce shape); see severity_map.json."
+    },
+    "type": {
+      "enum": ["fact", "decision", "preference", "lesson", "procedure_pointer", "blocker", "relation", "task_state"],
+      "description": "MEMORY_TYPES. Validator warns (not errors) on out-of-set; severity=warning."
+    },
+    "scope": {
+      "enum": ["global", "profile", "business", "project", "agent", "user", "customer", "system"],
+      "description": "MEMORY_SCOPES. Validator warns on out-of-set; severity=warning."
+    },
+    "profile": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Deployment profile this record belongs to."
+    },
+    "subject": {
+      "type": "string",
+      "minLength": 1
+    },
+    "statement": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1200,
+      "description": "Declarative memory text. maxLength mirrors memory_propose STATEMENT_MAX; validator does not currently bound length, so length overflow is severity=warning."
+    },
+    "status": {
+      "enum": ["draft", "candidate", "validated", "active", "superseded", "archived", "disputed"],
+      "description": "MEMORY_STATUSES. Invalid value is severity=error."
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0,
+      "description": "Numeric in [0,1]. JSON booleans are not numbers, matching the validator's explicit bool exclusion."
+    },
+    "source_ids": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": []
+    },
+    "source_paths": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": [],
+      "description": "Root-relative or {paths.<key>}/... token form. Machine-absolute paths are forbidden only when the active profile lint sets forbid_absolute_paths_in_memory_records (profile-conditional, enforced by the validator, not by this base schema)."
+    },
+    "valid_from": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+    },
+    "valid_until": {
+      "type": ["string", "null"],
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+    },
+    "supersedes": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^mem_" },
+      "default": [],
+      "description": "Structured supersession targets. Every entry must have a matching supersessions.jsonl pair (cross-record check, validator-supplemented)."
+    },
+    "sensitivity": {
+      "enum": ["public", "internal", "confidential", "restricted", "secret_ref"],
+      "description": "SENSITIVITY_LEVELS. Invalid value is severity=error."
+    },
+    "visibility": {
+      "enum": ["human_visible", "restricted_summary", "metadata_only"],
+      "description": "VISIBILITY_LEVELS. Invalid value is severity=error."
+    },
+    "created_at": {
+      "type": "string",
+      "minLength": 1,
+      "description": "ISO-8601 timestamp."
+    },
+    "created_by": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Agent id. Known-actor membership is a profile-conditional cross-check (validator-supplemented), not enforced here."
+    },
+    "reviewed_by": {
+      "type": ["string", "null"],
+      "description": "Reviewer agent id, or null. Must be string-or-null; a list-typed value is severity=error (impersonation guard)."
+    },
+    "reviewed_at": {
+      "type": ["string", "null"]
+    },
+    "write_policy": {
+      "enum": ["proposal_only", "approved_canonical", "system_generated"]
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "allOf": [
+    {
+      "$comment": "active/validated records must carry independent review metadata (validate_procheiron2 lines 440-452). reviewed_by must be present and non-null.",
+      "if": {
+        "properties": { "status": { "enum": ["active", "validated"] } },
+        "required": ["status"]
+      },
+      "then": {
+        "required": ["reviewed_by", "reviewed_at"],
+        "properties": {
+          "reviewed_by": { "type": "string", "minLength": 1 },
+          "reviewed_at": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    {
+      "$comment": "An active record may not be write_policy proposal_only (SCHEMA rule 9; validate_procheiron2 line 441). Promotion sets approved_canonical.",
+      "if": {
+        "properties": { "status": { "const": "active" } },
+        "required": ["status"]
+      },
+      "then": {
+        "not": {
+          "properties": { "write_policy": { "const": "proposal_only" } },
+          "required": ["write_policy"]
+        }
+      }
+    }
+  ]
+}

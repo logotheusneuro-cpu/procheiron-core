@@ -1,0 +1,133 @@
+{
+  "$comment": "Single source of the authority ladder + gate registry + reviewer roles + invalid transitions, transcribed VERBATIM from the LIVE SELF_ACTION_POLICY.md (constitution @ SHA256 93483f65, untouched). Both the Rego policy (procheiron.rego, loaded as data) and the stdlib reference evaluator (procheiron_policy.py) read THIS file, so they cannot drift apart. The ladder-collapse proposal (retire dead L2, merge L7 into the external gate) is NOT reflected here — it is a staged constitutional edit (LADDER_COLLAPSE.staged.md). This file encodes the ladder AS-IS.",
+  "spec_version": "0.1",
+  "constitution_sha256_prefix": "93483f65",
+  "ladder": {
+    "L0": {"rank": 0, "name": "Observation"},
+    "L1": {"rank": 1, "name": "Proposal / Draft"},
+    "L2": {"rank": 2, "name": "Reserved Low-Risk Local Preparation", "dead": true,
+           "note": "Authorizes nothing by default; reserved/undefined. Collapse candidate."},
+    "L3": {"rank": 3, "name": "Reversible Sandbox-Only Mutation"},
+    "L4": {"rank": 4, "name": "Canonical Mutation Approval"},
+    "L5": {"rank": 5, "name": "Commit Approval"},
+    "L6": {"rank": 6, "name": "Push Approval"},
+    "L7": {"rank": 7, "name": "Escalated Review / No-Send Adjacent Review",
+           "note": "Collapse candidate: merge into external_action_send_gate."},
+    "L8": {"rank": 8, "name": "Runtime / Production Mutation Approval"},
+    "L9": {"rank": 9, "name": "Constitutional Authority Expansion / Self-Action Adoption"}
+  },
+  "roles": [
+    "proposer", "drafter", "technical_reviewer", "operations_reviewer", "business_owner",
+    "system_owner", "memory_reviewer_curator", "canonical_governance_reviewer",
+    "authority_reviewer", "independent_adversarial_reviewer", "constitutional_reviewer_authority",
+    "executor", "auditor"
+  ],
+  "l9_only_approver": "constitutional_reviewer_authority",
+  "gates": {
+    "approval_ledger_gate": {
+      "allowed_levels": [1],
+      "required_reviewers": ["operations_reviewer", "authority_reviewer"],
+      "approver_role": null,
+      "runtime_root": "{paths.runtime_root}/approvals",
+      "status": "inert_scaffold"
+    },
+    "no_send_alert_packet_gate": {
+      "allowed_levels": [7],
+      "required_reviewers": ["operations_reviewer", "authority_reviewer"],
+      "approver_role": null,
+      "runtime_root": "{paths.runtime_root}/alert_packets",
+      "status": "proposed_only"
+    },
+    "git_executor_gate": {
+      "allowed_levels": [5, 6],
+      "required_reviewers": ["technical_reviewer", "authority_reviewer"],
+      "approver_role": "repo_or_system_owner",
+      "runtime_root": "{paths.runtime_root}/git_plans",
+      "status": "proposed_only"
+    },
+    "memory_promotion_gate": {
+      "allowed_levels": [4],
+      "required_reviewers": ["memory_reviewer_curator", "authority_reviewer"],
+      "approver_role": "memory_reviewer_curator",
+      "runtime_root": "{paths.runtime_root}/memory_promotion",
+      "status": "proposed_only"
+    },
+    "canonical_policy_edit_gate": {
+      "allowed_levels": [4, 9],
+      "required_reviewers": ["canonical_governance_reviewer", "authority_reviewer"],
+      "approver_role": "canonical_governance_reviewer",
+      "l9_approver_role": "constitutional_reviewer_authority",
+      "runtime_root": "{paths.runtime_root}/policy_edit",
+      "status": "proposed_only"
+    },
+    "repair_sandbox_gate": {
+      "allowed_levels": [3, 8, 9],
+      "required_reviewers": ["technical_reviewer", "operations_reviewer", "authority_reviewer"],
+      "approver_role": "system_owner",
+      "l9_approver_role": "constitutional_reviewer_authority",
+      "runtime_root": "{paths.runtime_root}/repair_sandbox",
+      "status": "proposed_only"
+    },
+    "runtime_mutation_gate": {
+      "allowed_levels": [8],
+      "required_reviewers": ["system_owner", "technical_reviewer", "authority_reviewer"],
+      "approver_role": "system_owner",
+      "l9_approver_role": "constitutional_reviewer_authority",
+      "runtime_root": "{paths.runtime_root}/runtime_mutation",
+      "status": "proposed_only"
+    },
+    "production_repair_gate": {
+      "allowed_levels": [8, 9],
+      "required_reviewers": ["technical_reviewer", "operations_reviewer", "system_owner", "authority_reviewer"],
+      "optional_reviewers": ["business_owner"],
+      "approver_role": "system_owner",
+      "l9_approver_role": "constitutional_reviewer_authority",
+      "runtime_root": "{paths.runtime_root}/production_repair",
+      "status": "proposed_only"
+    },
+    "external_action_send_gate": {
+      "allowed_levels": [5, 6, 8, 9],
+      "requires_explicit_human_external_approval": true,
+      "required_reviewers": ["business_owner", "operations_reviewer", "technical_reviewer", "authority_reviewer"],
+      "approver_role": "business_owner",
+      "l9_approver_role": "constitutional_reviewer_authority",
+      "runtime_root": "{paths.runtime_root}/external_action",
+      "status": "proposed_only"
+    },
+    "self_action_policy_adoption_gate": {
+      "allowed_levels": [9],
+      "required_reviewers": ["independent_adversarial_reviewer", "canonical_governance_reviewer", "system_owner", "authority_reviewer"],
+      "approver_role": "constitutional_reviewer_authority",
+      "runtime_root": "{paths.runtime_root}/self_action_policy",
+      "status": "proposed_draft_unless_l9"
+    }
+  },
+  "invalid_transitions": [
+    ["proposal", "implementation"],
+    ["draft", "canonical"],
+    ["retrieval_hit", "authority"],
+    ["health_ok", "authority"],
+    ["prior_success", "future_authority"],
+    ["emergency_label", "authority_bypass"],
+    ["self_propose", "self_approve_expanded_authority"],
+    ["reviewer_synonym", "required_reviewer_role"],
+    ["no_send_packet", "external_send"],
+    ["memory_candidate", "active_memory"],
+    ["canonical_patch_proposal", "canonical_edit"],
+    ["sandbox_repair", "production_repair"],
+    ["runtime_metadata_check", "runtime_content_parse"],
+    ["runtime_metadata_check", "runtime_mutation"],
+    ["production_repair", "external_action"],
+    ["external_action_approval", "bulk_send"],
+    ["single_send_approval", "recurring_send"],
+    ["git_add", "commit"],
+    ["commit_approval", "push"],
+    ["push_approval", "force_push_tag_merge"],
+    ["failed_action", "automatic_retry_rollback"],
+    ["runtime_root_absence", "create_root"],
+    ["clean_protected_surfaces", "mutate_protected_surfaces"],
+    ["agent_capability", "agent_authority"],
+    ["l9_one_gate", "adjacent_gate"],
+    ["l9_policy_adoption", "gate_implementation"]
+  ]
+}
