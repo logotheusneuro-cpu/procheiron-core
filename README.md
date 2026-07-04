@@ -1,5 +1,9 @@
 # Procheiron
 
+[![ci](https://github.com/logotheusneuro-cpu/procheiron-core/actions/workflows/ci.yml/badge.svg)](https://github.com/logotheusneuro-cpu/procheiron-core/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/procheiron)](https://pypi.org/project/procheiron/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 **A governance and provenance layer for agent memory.** Not a memory engine — the trust layer that
 sits on top of one.
 
@@ -12,7 +16,7 @@ agents sharing one governed source of truth.** Provenance here is enforced by va
 authorship against an insider with write access (single trust domain). See **[CLAIMS.md](CLAIMS.md)** for
 the exact trust model and its limits.
 
-Status: **v0.1 draft, pre-release.** Conformance passes at fixture level (a second, fully fictional
+Status: **v0.2.0, pre-release** (spec v0.1). Conformance passes at fixture level (a second, fully fictional
 deployment validates against the same Core). Honest scope discipline: nothing here claims more than the
 conformance suite proves.
 
@@ -81,6 +85,8 @@ fact via the anchor), not tamper-*prevention*. See `CLAIMS.md` for the exact sta
 ```bash
 # Install (zero runtime dependencies — stdlib-only Python):
 pipx install procheiron          # or: pip install procheiron
+# (PyPI currently serves 0.1.0; for v0.2.0 — the tamper-evident chain + signing —
+#  install from source below until the 0.2.0 release is published.)
 
 # Scaffold a governed memory commons and validate it:
 procheiron init ./my-commons

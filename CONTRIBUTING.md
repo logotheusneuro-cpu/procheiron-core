@@ -16,8 +16,9 @@ with one rule that comes from the project's own subject matter: **claims trail p
    not committed (see `run_conformance.py`).
 4. **Portable Core, specific Profile.** Keep deployment-specific detail (paths, identities, ladder/gate
    tables, executor bindings) in profiles/examples — not in the normative spec. See `spec/boundary.md`.
-5. **Number honestly.** This is v0.1. v1.0 is earned only when a second *real* deployment passes
-   conformance — not by a fixture pass, a single deployment, or authority approval alone.
+5. **Number honestly.** Version numbers are earned, not declared. v1.0 requires a second *real*
+   deployment passing conformance — not a fixture pass, a single deployment, or authority approval alone.
+   (See `CHANGELOG.md` for what each released version actually proved.)
 
 ## How to propose a change
 
