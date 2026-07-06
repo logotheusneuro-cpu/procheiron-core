@@ -201,6 +201,22 @@ def append_jsonl(path: Path, obj: Dict[str, Any]) -> None:
         os.close(fd)
 
 
+def _append_audit_event(path: Path, event: Dict[str, Any]) -> None:
+    """Append an audit event, hash-chaining it (and ed25519-signing it when
+    PROCHEIRON_SIGNING_KEY is set) via the installed procheiron package. Falls back
+    to a plain append when the package/chain helper is unavailable — the event is
+    then unchained, and a deployment running lint `verify_audit_chain` will flag it.
+    Preserves the writers' audit-line-first, atomic O_NOFOLLOW append discipline."""
+    try:
+        from procheiron import chain as _chain  # type: ignore
+    except Exception:
+        _chain = None
+    if _chain is not None:
+        _chain.append_event(path, event, key_hex=os.environ.get("PROCHEIRON_SIGNING_KEY") or None)
+    else:
+        append_jsonl(path, event)
+
+
 class Lock:
     def __init__(self, root: Path) -> None:
         lock_dir = root / ".procheiron" / "locks"
@@ -325,14 +341,32 @@ def main() -> None:
                 print(f"memory_promote: WARNING — reviewer {reviewer!r} unverified (empty registry, "
                       "override in effect)", file=sys.stderr)
 
+        def refuse(reason: str) -> None:
+            """Log a schema-valid `promotion_refused` audit event, then fail. Durable
+            proof the gate blocked an unauthorized promotion (was stderr-only before).
+            A logging failure warns but never swallows the refusal (reliability)."""
+            if not args.dry_run:
+                _now = utc_now()
+                _ev = {"id": audit_id("promotion_refused", memory_id), "event_type": "promotion_refused",
+                       "action": "promotion_refused", "profile": cfg.profile, "actor": reviewer,
+                       "reviewer_role": args.reviewer_role, "memory_id": memory_id,
+                       "status_before": old_status, "status_after": old_status,
+                       "attempted_status": new_status, "created_by": created_by, "refused": True,
+                       "timestamp": _now, "created_at": _now, "reason": reason, "tool": "memory_promote.py"}
+                try:
+                    _append_audit_event(audit_path, _ev)
+                except Exception as _exc:  # logging must never swallow the refusal
+                    print(f"memory_promote: WARNING — could not log refusal ({_exc})", file=sys.stderr)
+            fail(reason)
+
         if (old_status, new_status) in INDEPENDENCE_REQUIRED:
             if norm(reviewer) == norm(created_by):
-                fail(f"self-review: {reviewer!r} created this record (invalid transition §8.7)")
+                refuse(f"self-review: {reviewer!r} created this record (invalid transition §8.7)")
             if any(reviewer in g and created_by in g for g in groups):
-                fail(f"same-harness review: {reviewer!r} and creator {created_by!r} share a declared "
-                     "actor group — independent review required (authority-laundering guard)")
+                refuse(f"same-harness review: {reviewer!r} and creator {created_by!r} share a declared "
+                       "actor group — independent review required (authority-laundering guard)")
         if new_status == "active" and not (args.authorized_by or "").strip():
-            fail("active promotion requires --authorized-by (memory_promotion_gate: curator/authorized human)")
+            refuse("active promotion requires --authorized-by (memory_promotion_gate: curator/authorized human)")
 
         # B2 (Phase-3 adoption, 2026-06-12): consult the live authority policy
         # (.procheiron/policy, stdlib reference backend — opa-binary adoption is a
@@ -365,7 +399,7 @@ def main() -> None:
                 _hard = [r for r in policy_decision.get("reasons", [])
                          if "self-review" in r or "self-approval" in r or "invalid transition" in r]
                 if _hard:
-                    fail("authority policy denied this transition: " + "; ".join(_hard))
+                    refuse("authority policy denied this transition: " + "; ".join(_hard))
         except SystemExit:
             raise
         except Exception as _exc:  # policy is advisory infra; never break the writer on it
@@ -461,7 +495,7 @@ def main() -> None:
             # that didn't land — tolerated (validator checks active⇒event, not the
             # reverse) — rather than a status change with NO audit event, which is
             # exactly the forge-indistinguishable state the gate exists to prevent.
-            append_jsonl(audit_path, event)
+            _append_audit_event(audit_path, event)
             if supersession_entry is not None:
                 append_jsonl(supersessions_path, supersession_entry)
             dump_jsonl_atomic(memories_path, records)

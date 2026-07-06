@@ -288,6 +288,33 @@ def check_doctrine_currency() -> Dict[str, Any]:
     return {"name": "doctrine currency (generic-vault constitution)", "kind": "guard", "ok": ok, "detail": detail}
 
 
+# The adopter tool templates in src/procheiron/data/adopter/ ARE the canonical source
+# (copied on adopter init), so unlike the constitution they get the strong guard:
+# byte-equality. They drifted once — memory_promote.py in fixture+example missed the
+# chained-audit/refuse() upgrade, resynced 2026-07-06.
+ADOPTER_TOOLS = ("memory_promote.py", "memory_propose.py",
+                 "procheiron_schema.py", "validate_minimal.py")
+
+
+def check_tool_currency() -> Dict[str, Any]:
+    src = HERE.parent / "src" / "procheiron" / "data" / "adopter"
+    stale = []
+    for name in ADOPTER_TOOLS:
+        canon = src / name
+        if not canon.is_file():
+            stale.append(f"MISSING template: src/procheiron/data/adopter/{name}")
+            continue
+        want = canon.read_bytes()
+        for copy in (HERE / "minimal-vault" / name,
+                     HERE.parent / "examples" / "minimal-adopter" / name):
+            if copy.is_file() and copy.read_bytes() != want:
+                stale.append(str(copy.relative_to(HERE.parent)))
+    ok = not stale
+    detail = ("fixture/example tools byte-identical to adopter templates" if ok
+              else f"TOOL DRIFT — resync from src/procheiron/data/adopter/: {stale}")
+    return {"name": "tool currency (fixture/example vs adopter templates)", "kind": "guard", "ok": ok, "detail": detail}
+
+
 # --------------------------------------------------------------- evaluate + main
 def evaluate(fx: Dict[str, Any], result: Dict[str, Any]) -> Dict[str, Any]:
     status, errors = result.get("status", "CRASH"), result.get("errors", []) or []
@@ -323,6 +350,7 @@ def main() -> int:
     results.extend(run_signature_checks())     # crypto-gated: ed25519 signatures (skips if no cryptography)
     results.append(check_version_consistency())  # pyproject version must match package __version__
     results.append(check_doctrine_currency())  # shipped constitution must carry current doctrine
+    results.append(check_tool_currency())      # fixture/example tools must match adopter templates
 
     passed = sum(1 for r in results if r["ok"])
     report = {"validator": "procheiron package (src/procheiron)", "passed": passed, "total": len(results),
