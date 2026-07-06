@@ -85,8 +85,6 @@ fact via the anchor), not tamper-*prevention*. See `CLAIMS.md` for the exact sta
 ```bash
 # Install (zero runtime dependencies — stdlib-only Python):
 pipx install procheiron          # or: pip install procheiron
-# (PyPI currently serves 0.1.0; for v0.2.0 — the tamper-evident chain + signing —
-#  install from source below until the 0.2.0 release is published.)
 
 # Scaffold a governed memory commons and validate it:
 procheiron init ./my-commons
