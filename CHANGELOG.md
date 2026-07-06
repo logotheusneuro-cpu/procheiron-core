@@ -5,6 +5,19 @@ All notable changes to this project are documented here. The format follows
 with the project's own rule that numbers are earned by conformance, not declared (see
 `CONTRIBUTING.md`).
 
+## [0.2.1] — 2026-07-06
+
+Documentation and fixture-hygiene release; no behavior changes.
+
+### Changed
+- README rewritten for readability: plainer language, no product comparisons, the trust model
+  explained in one place.
+- CLAIMS.md refreshed to match the published state: 0.2.0 on PyPI, and the Rego policy's
+  `opa test` CI job confirmed passing (11/11) — moved from caveat to proven.
+- Conformance fixtures resynced to the adopter template (the chained-audit/refuse upgrade had
+  drifted) and a tool-currency guard added: fixture copies of `memory_promote.py` must stay
+  byte-identical to the packaged adopter reference. Now 16/16 base, 18/18 with the crypto extra.
+
 ## [0.2.0] — 2026-07-04
 
 The "make trust real" release: closes the honor-system gap by making the audit trail
