@@ -1,51 +1,99 @@
-# Procheiron
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/logo-dark.svg">
+    <img src="assets/logo.svg" width="180" alt="Procheiron: a chain of records ending in a verified one">
+  </picture>
+</p>
 
-[![ci](https://github.com/logotheusneuro-cpu/procheiron-core/actions/workflows/ci.yml/badge.svg)](https://github.com/logotheusneuro-cpu/procheiron-core/actions/workflows/ci.yml)
-[![PyPI](https://img.shields.io/pypi/v/procheiron)](https://pypi.org/project/procheiron/)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+<h1 align="center">Procheiron</h1>
 
-Procheiron is a small, dependency-free trust layer for AI agent memory. It answers a question
-that gets surprisingly hard once more than one agent shares a source of truth: **who wrote this
-memory, who checked it, and has anyone tampered with the record since?**
+<p align="center">
+  <em>Who wrote this memory, who checked it — and has anyone touched it since?</em>
+</p>
 
-Memory tools are good at storing and recalling. Trust is the part nobody owns. Give several
-agents a shared memory and any one of them can write a "fact" the others will happily build on.
-Nobody reviewed it, nobody approved it, and when it turns out to be wrong there is no clean way
-to trace it or retire it.
+<p align="center">
+  <a href="https://github.com/logotheusneuro-cpu/procheiron-core/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/logotheusneuro-cpu/procheiron-core/ci.yml?style=flat-square&label=ci" alt="CI"></a>
+  <a href="https://pypi.org/project/procheiron/"><img src="https://img.shields.io/pypi/v/procheiron?style=flat-square" alt="PyPI"></a>
+  <img src="https://img.shields.io/badge/python-3.9%2B-blue?style=flat-square" alt="Python 3.9+">
+  <img src="https://img.shields.io/badge/runtime%20deps-0-brightgreen?style=flat-square" alt="Zero runtime dependencies">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="MIT license"></a>
+</p>
 
-Procheiron adds the missing discipline, and enforces it with a validator rather than a convention:
+Procheiron is a small, dependency-free trust layer for AI agent memory. Memory tools are good at
+storing and recalling; trust is the part nobody owns. Give several agents a shared memory and any
+one of them can write a "fact" the others will happily build on — nobody reviewed it, nobody
+approved it, and when it turns out to be wrong there's no clean way to trace it or retire it.
 
-- Every memory moves through a lifecycle: `draft → candidate → validated → active → superseded`.
-- A memory only becomes `active` — trusted — after review by someone who did not write it.
-  Self-review is refused, not discouraged.
-- Every step lands in an append-only audit log whose entries are hash-chained (BLAKE2b, pure
-  standard library). Editing, reordering, or deleting a past event breaks the chain, and
-  `procheiron validate` will say so.
-- If you want authorship you can verify cryptographically, install the optional crypto extra and
-  sign entries with ed25519. A signature check that cannot run is a hard error, never a silent pass.
+Procheiron adds that discipline, and enforces it with a validator rather than a convention. It
+stores nothing and retrieves nothing: bring whatever memory you already use — a vector database,
+a knowledge graph, a folder of markdown files. It governs the records; your engine keeps doing
+the remembering.
 
-Procheiron stores nothing and retrieves nothing. Bring whatever memory you already use — a vector
-database, a knowledge graph, a folder of markdown files. It governs the records; your engine keeps
-doing the remembering.
+## Caught in the act
 
-## Quick start
+A deployment validates clean. Then someone with write access quietly rewrites history — a past
+promotion suddenly claims a different actor:
+
+```console
+$ procheiron validate ./team-memory
+Procheiron validation (full tier): PASS
+
+$ # edit team-memory/memory/index/audit.jsonl:  "actor": "vera_curator" → "rogue_agent"
+
+$ procheiron validate ./team-memory
+Procheiron validation (full tier): FAIL
+  ERROR: audit chain: audit event 0: entry_hash mismatch — content was altered
+         after it was written
+  ERROR: memories.jsonl:1: active record has no corroborating promotion audit
+         event — forged/hand-flipped record
+```
+
+<sub>Real output (ids shortened). Reproduce it yourself: `conformance/generic-vault/` is a
+complete fictional deployment — copy it, break it, validate it.</sub>
+
+## How it works
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/lifecycle-dark.svg">
+    <img src="assets/lifecycle.svg" width="860" alt="Lifecycle: draft to candidate to validated, through an enforced independent-review gate, to active — with every transition recorded in a hash-chained audit log whose head can be anchored externally">
+  </picture>
+</p>
+
+1. Every memory moves through a lifecycle: `draft → candidate → validated → active → superseded`.
+2. A memory only becomes `active` — trusted — after review by someone who did not write it.
+   Self-review is refused, not discouraged.
+3. Every step lands in an append-only audit log whose entries are hash-chained (BLAKE2b, pure
+   standard library). Editing, reordering, or deleting a past event breaks the chain.
+4. Want authorship you can verify cryptographically? Install the crypto extra and sign entries
+   with ed25519. A signature check that cannot run is a hard error, never a silent pass.
+
+## Install
 
 ```bash
-pipx install procheiron          # or: pip install procheiron
-                                 # zero runtime dependencies, stdlib-only Python
-
-procheiron init ./my-commons     # scaffold a governed memory commons
-procheiron validate ./my-commons # check it against the spec
+pipx install procheiron            # or: pip install procheiron
+pip install "procheiron[crypto]"   # optional: ed25519 signing (the chain itself needs nothing)
 ```
 
 Or straight from a checkout, no install:
 
 ```bash
-python3 conformance/run_conformance.py   # prove the spec holds against the bundled fixtures
+python3 conformance/run_conformance.py       # prove the spec holds against the bundled fixtures
 python3 init/procheiron_init.py --root ./my-commons
 ```
 
-## What the audit log does and doesn't protect you from
+## Commands
+
+| Command | What it does |
+|---|---|
+| `procheiron init ./my-commons` | Scaffold a governed memory commons. |
+| `procheiron validate <root>` | Validate a deployment. Add `--expect-head <hex>` to also check the chain head against an external anchor. |
+| `procheiron scorecard <root>` | Trust-loop numbers: records, independent promotions, blocks caught. |
+| `procheiron mcp <root>` | Serve the commons to agents over MCP (stdio JSON-RPC). |
+| `procheiron conformance` | Run the conformance suite (needs a repo checkout). |
+| `procheiron version` | What it says. |
+
+## What the audit log can and can't do
 
 A candid word before you rely on it.
 
@@ -68,13 +116,6 @@ reach — a separate user, an HSM, or keyless signing.
 We keep a running ledger of what's proven versus merely claimed in **[CLAIMS.md](CLAIMS.md)**,
 with evidence cited per claim. If anything in this README ever disagrees with that file, the
 file is right.
-
-## Where the project stands
-
-Version 0.2.x, spec v0.1. The conformance suite passes against the bundled fixtures, including a
-complete fictional deployment that the core has never seen. What it hasn't had yet is a second
-*real* deployment run by someone who isn't us — that's the milestone we care about most, and
-until it happens we don't claim production-readiness anywhere.
 
 ## What's in the repo
 
@@ -107,6 +148,25 @@ until it happens we don't claim production-readiness anywhere.
 
 Shipped so far: v0.1 brought the spec, conformance suite, CLI, and scaffolder; v0.2 brought the
 tamper-evident chain and optional signing.
+
+## FAQ
+
+**Is this a memory engine?** No. It has no embeddings, no retrieval, no recall benchmarks, and
+never will. It governs the records your engine holds.
+
+**Can it stop a malicious insider?** Detection, yes; prevention only if you do two things — anchor
+the chain head outside the insider's reach and keep signing keys out of their write scope. The
+section above spells out exactly where the line is.
+
+**Why zero dependencies?** A trust layer shouldn't ask you to trust a dependency tree. Everything
+a live deployment runs is standard-library Python; even the hash chain is stdlib.
+
+**Is it production-ready?** Not by our own rule. Conformance passes at fixture level, but the
+"production-replicable" claim is reserved until a second *real* deployment — run by someone who
+isn't us — passes the suite. That's roadmap item one.
+
+**What does the name mean?** *Procheiron* (πρόχειρον) is Greek for "ready at hand" — historically,
+a short practical handbook of law. A fitting name for a small set of rules you keep within reach.
 
 ## License
 

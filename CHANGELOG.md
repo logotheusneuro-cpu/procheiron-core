@@ -10,8 +10,9 @@ with the project's own rule that numbers are earned by conformance, not declared
 Documentation and fixture-hygiene release; no behavior changes.
 
 ### Changed
-- README rewritten for readability: plainer language, no product comparisons, the trust model
-  explained in one place.
+- README rewritten and restructured: plainer language, no product comparisons, the trust model
+  explained in one place; logo and lifecycle diagram (light/dark variants), a real
+  tamper-detection demo up top, and install/commands/FAQ sections.
 - CLAIMS.md refreshed to match the published state: 0.2.0 on PyPI, and the Rego policy's
   `opa test` CI job confirmed passing (11/11) — moved from caveat to proven.
 - Conformance fixtures resynced to the adopter template (the chained-audit/refuse upgrade had
