@@ -54,7 +54,7 @@ complete fictional deployment — copy it, break it, validate it.</sub>
 ## How it works
 
 <p align="center">
-  <img src="assets/lifecycle.webp" width="860" alt="Lifecycle: draft to candidate to validated, through an enforced independent-review gate, to active — with every transition recorded in a hash-chained audit log whose head is anchored externally">
+  <img src="assets/lifecycle.webp" width="860" alt="Three scenes: one agent writes a record into a shared store; a different agent inspects it and stamps it with a green check; the approved records are joined in a chain — and when an attacker tries to swap one, the chain link snaps and an alarm fires.">
 </p>
 
 1. Every memory moves through a lifecycle: `draft → candidate → validated → active → superseded`.
