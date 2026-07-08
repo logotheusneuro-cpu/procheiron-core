@@ -1,8 +1,5 @@
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="assets/logo-dark.svg">
-    <img src="assets/logo.svg" width="180" alt="Procheiron: a chain of records ending in a verified one">
-  </picture>
+  <img src="assets/logo-mark.webp" width="120" alt="Procheiron mark: an open hand holding a flame, struck as a Roman coin">
 </p>
 
 <h1 align="center">Procheiron</h1>
@@ -17,6 +14,10 @@
   <img src="https://img.shields.io/badge/python-3.9%2B-blue?style=flat-square" alt="Python 3.9+">
   <img src="https://img.shields.io/badge/runtime%20deps-0-brightgreen?style=flat-square" alt="Zero runtime dependencies">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="MIT license"></a>
+</p>
+
+<p align="center">
+  <img src="assets/hero-marcus.webp" width="460" alt="Marcus Aurelius — the Stoic emperor who kept his principles procheiron, 'ready at hand'">
 </p>
 
 Procheiron is a small, dependency-free trust layer for AI agent memory. Memory tools are good at
