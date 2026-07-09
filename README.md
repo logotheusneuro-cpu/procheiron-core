@@ -17,7 +17,7 @@
 </p>
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/logotheusneuro-cpu/procheiron-core/master/assets/hero-marcus.webp" width="460" alt="Marcus Aurelius — the Stoic emperor who kept his principles procheiron, 'ready at hand'">
+  <img src="https://raw.githubusercontent.com/logotheusneuro-cpu/procheiron-core/master/assets/hero-marcus.webp" width="380" alt="Marcus Aurelius — the Stoic emperor who kept his principles procheiron, 'ready at hand'">
 </p>
 
 Procheiron is a small, dependency-free trust layer for AI agent memory. Memory tools are good at
@@ -49,8 +49,71 @@ Procheiron validation (full tier): FAIL
          event — forged/hand-flipped record
 ```
 
-<sub>Real output (ids shortened). Reproduce it yourself: `conformance/generic-vault/` is a
-complete fictional deployment — copy it, break it, validate it.</sub>
+<sub>Real output (ids shortened). You can reproduce this exact catch on your own machine in the
+next two sections — no clone required.</sub>
+
+## Install
+
+```bash
+pipx install procheiron            # or: pip install procheiron
+pip install "procheiron[crypto]"   # optional: ed25519 signing (the chain itself needs nothing)
+```
+
+Using a coding agent? Hand it one instruction and it installs Procheiron, wires itself in over
+MCP, and runs the tamper check end to end:
+
+> Retrieve and follow the instructions at:
+> https://raw.githubusercontent.com/logotheusneuro-cpu/procheiron-core/master/INSTALL_FOR_AGENTS.md
+
+Or prove the spec from a bare checkout, no install at all: `python3 conformance/run_conformance.py`.
+
+## Break it yourself (60 seconds)
+
+The demo above, on your own machine: scaffold a commons, write one governed memory, then rewrite
+history and watch the chain snap.
+
+```bash
+procheiron init ./commons && cd commons
+
+# 1. propose a memory as alice
+python3 memory_propose.py --created-by alice --type decision --scope project \
+    --subject "retry policy" --statement "Retries use exponential backoff." \
+    --source-path docs/decisions.md --confidence 0.9
+
+# 2. promote it — reviewed by someone who is NOT alice (self-review is refused)
+python3 memory_promote.py --memory-id <id printed by step 1> --new-status active \
+    --reviewer bob --authorized-by casey --reason "verified against the source" \
+    --allow-unverified-reviewer
+
+procheiron validate .        # PASS
+
+# 3. rewrite history — swap the reviewer on the promotion event
+sed -i.bak 's/bob/rogue/g' memory/index/audit.jsonl
+
+procheiron validate .        # FAIL: entry_hash mismatch — content was altered
+mv memory/index/audit.jsonl.bak memory/index/audit.jsonl    # put history back → PASS again
+```
+
+## Works with your agent
+
+Procheiron ships an MCP server, so any MCP-speaking agent — Claude Code, Claude Desktop, Cursor,
+Codex, and the rest — reads and writes the commons under the same rules a human faces. Four
+tools: `memory.search`, `memory.get`, `memory.propose`, `memory.promote`.
+
+Claude Code:
+
+```bash
+claude mcp add procheiron -- procheiron mcp --root ./commons
+```
+
+Anything with an `mcpServers` config (Cursor, Claude Desktop, …) — merge, don't replace:
+
+```json
+{ "mcpServers": { "procheiron": { "command": "procheiron", "args": ["mcp", "--root", "./commons"] } } }
+```
+
+Writes are dry-run until you pass `--allow-writes`, and promotion over MCP hits the same gate as
+everywhere else: the agent that wrote a memory cannot approve it.
 
 ## How it works
 
@@ -60,25 +123,33 @@ complete fictional deployment — copy it, break it, validate it.</sub>
 
 1. Every memory moves through a lifecycle: `draft → candidate → validated → active → superseded`.
 2. A memory only becomes `active` — trusted — after review by someone who did not write it.
-   Self-review is refused, not discouraged.
+   Self-review is refused, not discouraged:
+
+   ```console
+   $ python3 memory_promote.py --memory-id mem_20260709_retry_policy… --new-status active \
+         --reviewer alice --reason "looks right to me"
+   memory_promote: REFUSED — self-review: 'alice' created this record (invalid transition §8.7)
+   ```
+
 3. Every step lands in an append-only audit log whose entries are hash-chained (BLAKE2b, pure
    standard library). Editing, reordering, or deleting a past event breaks the chain.
 4. Want authorship you can verify cryptographically? Install the crypto extra and sign entries
    with ed25519. A signature check that cannot run is a hard error, never a silent pass.
 
-## Install
+## How it compares
 
-```bash
-pipx install procheiron            # or: pip install procheiron
-pip install "procheiron[crypto]"   # optional: ed25519 signing (the chain itself needs nothing)
-```
+What you'd otherwise do for trust in agent memory:
 
-Or straight from a checkout, no install:
+|  | Enforced independent review | Tamper-evident history | Works with any store | Setup |
+|---|---|---|---|---|
+| Convention docs ("agents should…") | no — honor system | no | — | none |
+| Git history on the memory files | no | partial — rewritable | yes | none |
+| Your memory engine's metadata | no — self-asserted | no | that engine only | none |
+| Full provenance stack (W3C PROV + signing infra) | possible | yes | yes | weeks |
+| **Procheiron** | **yes — validator-refused** | **yes — hash chain + external anchor** | **yes — bring your own** | **pip install** |
 
-```bash
-python3 conformance/run_conformance.py       # prove the spec holds against the bundled fixtures
-python3 init/procheiron_init.py --root ./my-commons
-```
+Memory engines are not the competition — Procheiron governs the records they hold and will never
+grow retrieval of its own.
 
 ## Commands
 
@@ -87,7 +158,7 @@ python3 init/procheiron_init.py --root ./my-commons
 | `procheiron init ./my-commons` | Scaffold a governed memory commons. |
 | `procheiron validate <root>` | Validate a deployment. Add `--expect-head <hex>` to also check the chain head against an external anchor. |
 | `procheiron scorecard <root>` | Trust-loop numbers: records, independent promotions, blocks caught. |
-| `procheiron mcp <root>` | Serve the commons to agents over MCP (stdio JSON-RPC). |
+| `procheiron mcp --root <root>` | Serve the commons to agents over MCP (stdio JSON-RPC). |
 | `procheiron conformance` | Run the conformance suite (needs a repo checkout). |
 | `procheiron version` | What it says. |
 
@@ -101,6 +172,9 @@ to the file can rebuild the whole thing from scratch and it will verify. The fix
 newest entry hash somewhere that person can't touch (a git commit works fine) and hand it back at
 check time: `procheiron validate --expect-head <hex>`. Now a full rewrite is caught too.
 
+<details>
+<summary>The full threat model — signing, keys, and the determined insider</summary>
+
 Signing raises the bar further. With the crypto extra and a key registry (`known_actor_keys`),
 every event from a registered actor must carry that actor's valid signature. Stripping a
 signature fails validation; it does not slip through.
@@ -110,6 +184,8 @@ determined insider can still rewrite and re-sign everything. On a single shared 
 tamper-*evidence* (detectable through the external anchor), not tamper-*prevention*. To stop that
 insider outright you need the head anchored externally and the keys held out of the writer's
 reach — a separate user, an HSM, or keyless signing.
+
+</details>
 
 We keep a running ledger of what's proven versus merely claimed in **[CLAIMS.md](https://github.com/logotheusneuro-cpu/procheiron-core/blob/master/CLAIMS.md)**,
 with evidence cited per claim. If anything in this README ever disagrees with that file, the
@@ -122,7 +198,7 @@ file is right.
 | `spec/` | The v0.1 specification: governance, memory commons, control plane, the normative conformance MUST-list, and the Core/Profile boundary. |
 | `conformance/` | The test of record. `generic-vault/` is a complete fictional deployment ("Meridian Atelier"); `minimal-vault/` is the 5-file minimal adopter; plus negative fixtures that must fail. |
 | `examples/minimal-adopter/` | The smallest compliant deployment — provenance and independent review without the heavyweight governance ladder. |
-| `init/` | The scaffolder, and `PORTING_GUIDE.md` for bringing Procheiron to an existing project. |
+| `init/` | `PORTING_GUIDE.md` for bringing Procheiron to an existing project, plus the standalone scaffolder (`procheiron init` is the canonical path). |
 
 ## Design choices
 
@@ -147,6 +223,10 @@ file is right.
 Shipped so far: v0.1 brought the spec, conformance suite, CLI, and scaffolder; v0.2 brought the
 tamper-evident chain and optional signing.
 
+Running Procheiron somewhere? Open a
+[deployment report](https://github.com/logotheusneuro-cpu/procheiron-core/issues/new?template=deployment_report.yml)
+— an independent deployment is literally roadmap item one.
+
 ## FAQ
 
 **Is this a memory engine?** No. It has no embeddings, no retrieval, no recall benchmarks, and
@@ -161,7 +241,13 @@ a live deployment runs is standard-library Python; even the hash chain is stdlib
 
 **Is it production-ready?** Not by our own rule. Conformance passes at fixture level, but the
 "production-replicable" claim is reserved until a second *real* deployment — run by someone who
-isn't us — passes the suite. That's roadmap item one.
+isn't us — passes the suite. That's roadmap item one. What it is already good for today: a
+tamper-evident audit trail and enforced independent review on a single-team memory commons —
+exactly what the 60-second demo above shows.
+
+**What if I stop using it?** `pipx uninstall procheiron`, and keep everything: the commons is
+plain JSONL and Markdown — every record and every audit event stays readable with `cat`. No
+export step, no lock-in.
 
 **What does the name mean?** *Procheiron* (πρόχειρον) is Greek for "ready at hand" — historically,
 a short practical handbook of law. A fitting name for a small set of rules you keep within reach.

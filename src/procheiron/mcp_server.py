@@ -44,8 +44,10 @@ CANON_DOCS = [
     "AGENT_REGISTRY.md", "RETRIEVAL_POLICY.md", "PRECEDENCE.md",
     "DECISIONS.md", "BLOCKERS.md", "ACTIVE_PROJECTS.md",
 ]
+from . import __version__
+
 PROTOCOL_VERSION = "2024-11-05"
-SERVER_INFO = {"name": "procheiron", "version": "0.1.0"}
+SERVER_INFO = {"name": "procheiron", "version": __version__}
 
 # Set once in main() from --scripts-dir / --read-log (or env). Kept as module state
 # because the stdio server is a single bound process.

@@ -152,9 +152,14 @@ def _cmd_conformance(args: argparse.Namespace) -> int:
 
 def _cmd_mcp(args: argparse.Namespace) -> int:
     from .mcp_server import main as mcp_main
+    root_pos = getattr(args, "root_pos", None)
+    if root_pos and args.root and root_pos != args.root:
+        print(f"procheiron mcp: two different roots given ({root_pos} vs --root {args.root})", file=sys.stderr)
+        return 2
+    root = args.root or root_pos
     argv: list[str] = []
-    if args.root:
-        argv += ["--root", args.root]
+    if root:
+        argv += ["--root", root]
     argv += ["--actor", args.actor]
     if args.scripts_dir:
         argv += ["--scripts-dir", args.scripts_dir]
@@ -221,6 +226,8 @@ def main() -> None:
 
     # mcp
     p_mcp = sub.add_parser("mcp", help="Run the Procheiron MCP server (stdio JSON-RPC) for a deployment.")
+    p_mcp.add_argument("root_pos", nargs="?", metavar="root", default=None,
+                       help="Deployment root (positional, same as validate/init).")
     p_mcp.add_argument("--root", help="Deployment root (default: ancestor discovery / cwd).")
     p_mcp.add_argument("--actor", default="mcp_client", help="Bound client identity (created_by / policy actor).")
     p_mcp.add_argument("--scripts-dir", help="Dir holding memory_propose.py / memory_promote.py "

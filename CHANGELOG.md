@@ -5,6 +5,21 @@ All notable changes to this project are documented here. The format follows
 with the project's own rule that numbers are earned by conformance, not declared (see
 `CONTRIBUTING.md`).
 
+## [Unreleased]
+
+### Fixed
+- `procheiron mcp` accepts a positional root (`procheiron mcp ./commons`), matching `init` and
+  `validate`; `--root` keeps working. The MCP server now reports the real package version in
+  `initialize` (it was hardcoded to 0.1.0).
+
+### Changed
+- README restructured around a runnable 60-second tamper demo (pip-only, no clone), an agent
+  wiring section (MCP config for Claude Code / any `mcpServers` client), a "How it compares"
+  table, a collapsed full threat model, and exit-path/"good for today" answers in the FAQ.
+- Added `INSTALL_FOR_AGENTS.md`: a one-instruction install path a coding agent can execute —
+  install, scaffold, prove the tamper catch, wire itself in over MCP (writes stay
+  operator-gated), and report back.
+
 ## [0.2.2] — 2026-07-09
 
 First-run integrity release: a freshly scaffolded commons now delivers what the README
