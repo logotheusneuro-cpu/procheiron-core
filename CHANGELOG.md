@@ -5,14 +5,17 @@ All notable changes to this project are documented here. The format follows
 with the project's own rule that numbers are earned by conformance, not declared (see
 `CONTRIBUTING.md`).
 
-## [0.2.1] — 2026-07-06
+## [0.2.1] — 2026-07-09
 
 Documentation and fixture-hygiene release; no behavior changes.
 
 ### Changed
 - README rewritten and restructured: plainer language, no product comparisons, the trust model
-  explained in one place; logo and lifecycle diagram (light/dark variants), a real
-  tamper-detection demo up top, and install/commands/FAQ sections.
+  explained in one place; a real tamper-detection demo up top, and install/commands/FAQ sections.
+- Brand identity in `assets/`: the hand-and-flame coin mark, a Marcus Aurelius hero portrait,
+  and a three-scene lifecycle illustration (write → independent review → chain → tamper caught),
+  plus favicon and social-preview card.
+- README images and repo-file links use absolute URLs so the PyPI project page renders them.
 - CLAIMS.md refreshed to match the published state: 0.2.0 on PyPI, and the Rego policy's
   `opa test` CI job confirmed passing (11/11) — moved from caveat to proven.
 - Conformance fixtures resynced to the adopter template (the chained-audit/refuse upgrade had

@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/logo-mark.webp" width="120" alt="Procheiron mark: an open hand holding a flame, struck as a Roman coin">
+  <img src="https://raw.githubusercontent.com/logotheusneuro-cpu/procheiron-core/master/assets/logo-mark.webp" width="120" alt="Procheiron mark: an open hand holding a flame, struck as a Roman coin">
 </p>
 
 <h1 align="center">Procheiron</h1>
@@ -13,11 +13,11 @@
   <a href="https://pypi.org/project/procheiron/"><img src="https://img.shields.io/pypi/v/procheiron?style=flat-square" alt="PyPI"></a>
   <img src="https://img.shields.io/badge/python-3.9%2B-blue?style=flat-square" alt="Python 3.9+">
   <img src="https://img.shields.io/badge/runtime%20deps-0-brightgreen?style=flat-square" alt="Zero runtime dependencies">
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="MIT license"></a>
+  <a href="https://github.com/logotheusneuro-cpu/procheiron-core/blob/master/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="MIT license"></a>
 </p>
 
 <p align="center">
-  <img src="assets/hero-marcus.webp" width="460" alt="Marcus Aurelius — the Stoic emperor who kept his principles procheiron, 'ready at hand'">
+  <img src="https://raw.githubusercontent.com/logotheusneuro-cpu/procheiron-core/master/assets/hero-marcus.webp" width="460" alt="Marcus Aurelius — the Stoic emperor who kept his principles procheiron, 'ready at hand'">
 </p>
 
 Procheiron is a small, dependency-free trust layer for AI agent memory. Memory tools are good at
@@ -55,7 +55,7 @@ complete fictional deployment — copy it, break it, validate it.</sub>
 ## How it works
 
 <p align="center">
-  <img src="assets/lifecycle.webp" width="860" alt="Three scenes: one agent writes a record into a shared store; a different agent inspects it and stamps it with a green check; the approved records are joined in a chain — and when an attacker tries to swap one, the chain link snaps and an alarm fires.">
+  <img src="https://raw.githubusercontent.com/logotheusneuro-cpu/procheiron-core/master/assets/lifecycle.webp" width="860" alt="Three scenes: one agent writes a record into a shared store; a different agent inspects it and stamps it with a green check; the approved records are joined in a chain — and when an attacker tries to swap one, the chain link snaps and an alarm fires.">
 </p>
 
 1. Every memory moves through a lifecycle: `draft → candidate → validated → active → superseded`.
@@ -111,7 +111,7 @@ tamper-*evidence* (detectable through the external anchor), not tamper-*preventi
 insider outright you need the head anchored externally and the keys held out of the writer's
 reach — a separate user, an HSM, or keyless signing.
 
-We keep a running ledger of what's proven versus merely claimed in **[CLAIMS.md](CLAIMS.md)**,
+We keep a running ledger of what's proven versus merely claimed in **[CLAIMS.md](https://github.com/logotheusneuro-cpu/procheiron-core/blob/master/CLAIMS.md)**,
 with evidence cited per claim. If anything in this README ever disagrees with that file, the
 file is right.
 
@@ -168,4 +168,4 @@ a short practical handbook of law. A fitting name for a small set of rules you k
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT — see [LICENSE](https://github.com/logotheusneuro-cpu/procheiron-core/blob/master/LICENSE).
