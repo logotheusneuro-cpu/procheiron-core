@@ -5,7 +5,10 @@ All notable changes to this project are documented here. The format follows
 with the project's own rule that numbers are earned by conformance, not declared (see
 `CONTRIBUTING.md`).
 
-## [Unreleased]
+## [0.2.2] — 2026-07-09
+
+First-run integrity release: a freshly scaffolded commons now delivers what the README
+promises, from a plain pip install, on Linux, macOS, and Windows.
 
 ### Fixed
 - A commons scaffolded by `procheiron init` now works from a plain pip install: the adopter
