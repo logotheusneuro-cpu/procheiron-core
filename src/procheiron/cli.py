@@ -240,6 +240,13 @@ def main() -> None:
     p_sc.add_argument("--json", action="store_true", help="Print JSON report.")
 
     args = parser.parse_args()
+    # Validator messages carry em-dashes and arrows; Windows consoles default to
+    # cp1252. A tamper finding must never crash the report that describes it.
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, OSError):
+            pass
     dispatch = {
         "version": _cmd_version,
         "init": _cmd_init,

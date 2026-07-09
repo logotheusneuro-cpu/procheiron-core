@@ -5,6 +5,9 @@ on:
     branches: [main, master]
   pull_request:
 
+env:
+  PYTHONUTF8: "1"  # Windows runners default to cp1252; the suite prints UTF-8
+
 jobs:
   # The governance core is stdlib-only: conformance + smoke tests must pass with
   # ZERO dependencies installed, on every OS the stdlib claim implies.

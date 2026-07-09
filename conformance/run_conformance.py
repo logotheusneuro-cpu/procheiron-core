@@ -32,6 +32,14 @@ HERE = Path(__file__).resolve().parent
 GENERIC = HERE / "generic-vault"
 SRC = HERE.parent / "src"  # de-vendored: the ONE Core validator lives in the package, not the fixture
 
+# Windows consoles default to cp1252; the report uses arrows and dashes. Never
+# let the encoding of a PASS/FAIL line crash the suite that computed it.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, OSError):
+        pass
+
 
 # --------------------------------------------------------------- negative tampers
 def _edit_jsonl(p: Path, fn: Callable[[List[dict]], List[dict]]) -> None:
