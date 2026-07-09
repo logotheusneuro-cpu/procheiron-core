@@ -28,4 +28,7 @@ with one rule that comes from the project's own subject matter: **claims trail p
 
 ## What's most wanted right now
 
-See the Roadmap in `README.md` — the standalone, `--root`-relative MCP server is the top item.
+See the Roadmap in `README.md` — a second, independent real deployment is the top item.
+If you run Procheiron anywhere, a **deployment report** issue (template provided) is the
+single most valuable contribution you can make: it is literally roadmap item one. Rough-edge
+reports from a fresh `pip install` are a close second.

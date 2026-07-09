@@ -1,0 +1,37 @@
+name: Bug report
+description: Something broke, refused wrongly, or validated what it should have caught.
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you ran, what you expected, what you got instead.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Minimal reproduction
+      description: Ideally starting from `procheiron init ./commons` in an empty directory.
+      render: shell
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: "`procheiron version`"
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: OS and Python version
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: "`procheiron validate` / conformance output"
+      description: If relevant — especially for anything the validator caught or missed.
+      render: shell

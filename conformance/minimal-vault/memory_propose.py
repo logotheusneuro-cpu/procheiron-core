@@ -40,10 +40,11 @@ from pathlib import Path
 from typing import Any, List, Tuple
 
 
-def _bootstrap_lib() -> Tuple[Any, Any, Any]:
+def _bootstrap_lib() -> Tuple[Any, Any, Any, Any]:
     """Locate the shared lib. An explicit root (--root/PROCHEIRON_ROOT/
     PROCHEIRON_LIB) pins the lib location; only with no root given do we fall
-    back to cwd-ancestor discovery (review finding M-1)."""
+    back to cwd-ancestor discovery (review finding M-1). If no lib tree exists
+    at all, fall back to the installed procheiron package (fresh scaffolds)."""
     explicit: List[Path] = []
     env_lib = os.environ.get("PROCHEIRON_LIB")
     if env_lib:
@@ -70,17 +71,30 @@ def _bootstrap_lib() -> Tuple[Any, Any, Any]:
             import procheiron_patterns  # type: ignore
             import procheiron_paths  # type: ignore
             import procheiron_lock  # type: ignore
-            return procheiron_resolve, procheiron_patterns, procheiron_paths
+            return procheiron_resolve, procheiron_patterns, procheiron_paths, procheiron_lock
+    try:
+        # No deployment-pinned lib anywhere: fall back to the installed procheiron
+        # package — the canonical source of these same modules — so a fresh
+        # `procheiron init` scaffold works from a plain pip install. A deployment
+        # that ships its own .procheiron/lib always wins above.
+        from procheiron import lock as procheiron_lock  # type: ignore
+        from procheiron import paths as procheiron_paths  # type: ignore
+        from procheiron import patterns as procheiron_patterns  # type: ignore
+        from procheiron import resolve as procheiron_resolve  # type: ignore
+        return procheiron_resolve, procheiron_patterns, procheiron_paths, procheiron_lock
+    except ImportError:
+        pass
     print(
         "memory_propose: REFUSED — no complete Procheiron lib found at the specified root "
-        "(pass --root, set PROCHEIRON_ROOT/PROCHEIRON_LIB, or run under an installed tree)",
+        "(pass --root, set PROCHEIRON_ROOT/PROCHEIRON_LIB, run under an installed tree, "
+        "or `pip install procheiron`)",
         file=sys.stderr,
     )
     sys.exit(1)
 
 
-_resolve_mod, _patterns_mod, _paths_mod = _bootstrap_lib()
-from procheiron_lock import Lock  # shared single-writer lock (roadmap 3.6 / B5); same lockfile as memory_promote
+_resolve_mod, _patterns_mod, _paths_mod, _lock_mod = _bootstrap_lib()
+Lock = _lock_mod.Lock  # shared single-writer lock (roadmap 3.6 / B5); same lockfile as memory_promote
 
 ALLOWED_TYPES = {
     "fact", "decision", "preference", "lesson",
@@ -139,6 +153,22 @@ def append_line(path: Path, obj: dict) -> None:
             written += os.write(fd, payload[written:])
     finally:
         os.close(fd)
+
+
+def _append_audit_event(path: Path, event: dict) -> None:
+    """Append the audit event hash-chained (and ed25519-signed when
+    PROCHEIRON_SIGNING_KEY is set) via the installed procheiron package — same
+    discipline as memory_promote, so a fresh commons is chained from genesis.
+    Falls back to a plain append when the package/chain helper is unavailable;
+    a deployment running lint `verify_audit_chain` will flag the unchained event."""
+    try:
+        from procheiron import chain as _chain  # type: ignore
+    except Exception:
+        _chain = None
+    if _chain is not None:
+        _chain.append_event(path, event, key_hex=os.environ.get("PROCHEIRON_SIGNING_KEY") or None)
+    else:
+        append_line(path, event)
 
 
 def main() -> None:
@@ -263,7 +293,7 @@ def main() -> None:
         validate_existing_jsonl(memories)
         validate_existing_jsonl(audit)
         append_line(memories, record)
-        append_line(audit, audit_event)
+        _append_audit_event(audit, audit_event)
     print(f"memory_propose: appended candidate {mem_id} to {memories}")
 
 

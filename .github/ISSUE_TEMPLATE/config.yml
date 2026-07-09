@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Question / discussion
+    url: https://github.com/logotheusneuro-cpu/procheiron-core/discussions
+    about: Design questions, "is this right for my setup", threat-model doubts — ask anything.

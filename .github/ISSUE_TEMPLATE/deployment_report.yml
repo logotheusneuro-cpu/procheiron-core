@@ -1,0 +1,32 @@
+name: Deployment report
+description: You're running Procheiron somewhere. This is the most valuable issue you can open — an independent deployment is roadmap item one.
+labels: [deployment-report]
+body:
+  - type: textarea
+    id: setup
+    attributes:
+      label: What it governs
+      description: What kind of memory or store, how many writers, who reviews (humans, other agents, both). No secrets, no private paths.
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Validate / scorecard output
+      description: "`procheiron validate <root>` — and `procheiron scorecard <root>` if you like."
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: friction
+    attributes:
+      label: Rough edges
+      description: Anything confusing, anything that needed a workaround, anything that almost made you give up.
+  - type: dropdown
+    id: listing
+    attributes:
+      label: May we mention your deployment in the README once verified?
+      options:
+        - "Yes"
+        - "No"
+        - Ask me later

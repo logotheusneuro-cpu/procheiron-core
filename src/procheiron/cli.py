@@ -60,6 +60,44 @@ def _detect_tier(root: str) -> str:
     return "minimal"
 
 
+def _minimal_chain_errors(root: str) -> list:
+    """Minimal tier honors the deployment's `verify_audit_chain` lint flag using the
+    package chain module, so a scaffolded commons is tamper-evident through
+    `procheiron validate` — not only through the full-governance tier. No lint
+    profile (legacy minimal deployments) → no chain check; a lint that asks for
+    verification fails closed on an unreadable lint or audit log."""
+    rootp = Path(root).resolve()
+    try:
+        from .resolve import parse_simple_yaml
+        cfg = parse_simple_yaml(rootp / ".procheiron" / "config.yaml")
+    except Exception:  # noqa: BLE001 — missing/odd config is the minimal validator's error to report
+        return []
+    profile = str(cfg.get("profile") or "default")
+    lint_path = rootp / ".procheiron" / "profiles" / profile / "lint.json"
+    if not lint_path.is_file():
+        return []
+    try:
+        lint = json.loads(lint_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return [f"lint profile .procheiron/profiles/{profile}/lint.json is unreadable or not valid JSON"]
+    if not lint.get("verify_audit_chain", False):
+        return []
+    paths = cfg.get("paths") if isinstance(cfg.get("paths"), dict) else {}
+    audit = rootp / str(paths.get("memory") or "memory") / "index" / "audit.jsonl"
+    if not audit.is_file():
+        return []
+    events = []
+    for i, line in enumerate(audit.read_text(encoding="utf-8").splitlines(), 1):
+        if not line.strip():
+            continue
+        try:
+            events.append(json.loads(line))
+        except ValueError:
+            return [f"audit chain: audit.jsonl line {i}: not valid JSON"]
+    from .chain import verify_chain
+    return [f"audit chain: {err}" for err in verify_chain(events)]
+
+
 def _cmd_validate(args: argparse.Namespace) -> int:
     tier = "minimal" if args.minimal else "full" if args.full else _detect_tier(args.root)
     if tier == "minimal":
@@ -73,6 +111,10 @@ def _cmd_validate(args: argparse.Namespace) -> int:
         except (json.JSONDecodeError, ValueError):
             result = {"status": "FAIL",
                       "errors": [proc.stderr.strip() or "minimal validator produced no JSON output"]}
+        chain_errors = _minimal_chain_errors(args.root)
+        if chain_errors:
+            result["errors"] = list(result.get("errors", [])) + chain_errors
+            result["status"] = "FAIL"
     else:
         from .validate import run
         try:

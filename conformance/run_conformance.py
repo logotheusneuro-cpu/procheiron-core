@@ -23,6 +23,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 from typing import Any, Callable, Dict, List
@@ -145,7 +146,8 @@ TAMPERS: Dict[str, Callable[[Path], None]] = {
 # --------------------------------------------------------------- validators
 def _env() -> Dict[str, str]:
     env = dict(os.environ)
-    env.setdefault("PROCHEIRON_READ_LOG", "/tmp/procheiron_conformance_reads.jsonl")
+    env.setdefault("PROCHEIRON_READ_LOG",
+                   os.path.join(tempfile.gettempdir(), "procheiron_conformance_reads.jsonl"))
     return env
 
 
@@ -155,7 +157,7 @@ def run_validator(root: Path) -> Dict[str, Any]:
     'the Core validator passes a second deployment' — not 'a copy validates itself'."""
     env = _env()
     env["PYTHONPATH"] = str(SRC) + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
-    cmd = ["python3", "-m", "procheiron.validate",
+    cmd = [sys.executable, "-m", "procheiron.validate",
            "--root", str(root), "--records", "--json"]
     if (root / ".procheiron" / "profiles").is_dir():
         cmd += ["--profiles-dir", str(root / ".procheiron" / "profiles")]
@@ -164,7 +166,7 @@ def run_validator(root: Path) -> Dict[str, Any]:
 
 def run_minimal(root: Path) -> Dict[str, Any]:
     val = HERE.parent / "examples" / "minimal-adopter" / "validate_minimal.py"
-    return _parse(subprocess.run(["python3", str(val), "--root", str(root), "--json"],
+    return _parse(subprocess.run([sys.executable, str(val), "--root", str(root), "--json"],
                                  capture_output=True, text=True, env=_env(), timeout=120))
 
 
@@ -315,6 +317,66 @@ def check_tool_currency() -> Dict[str, Any]:
     return {"name": "tool currency (fixture/example vs adopter templates)", "kind": "guard", "ok": ok, "detail": detail}
 
 
+def check_pip_journey() -> Dict[str, Any]:
+    """A pip-only user's first session, end to end: init a commons, propose a memory,
+    have self-review refused, promote independently, validate PASS, tamper the audit
+    chain, validate FAIL. Runs the scaffolded tools exactly as a fresh user would
+    (subprocesses in a temp dir, no deployment lib tree) — guards the installed-package
+    fallback in the adopter tools and the tamper-evident-by-default scaffold lint."""
+    name = "pip journey (init→propose→refuse self-review→promote→tamper caught)"
+    env = _env()
+    if SRC.is_dir():
+        env["PYTHONPATH"] = str(SRC) + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
+
+    def bad(detail: str) -> Dict[str, Any]:
+        return {"name": name, "kind": "guard", "ok": False, "detail": detail}
+
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td) / "commons"
+
+        def run(*argv: str) -> subprocess.CompletedProcess:
+            return subprocess.run([sys.executable, *argv], cwd=td,
+                                  capture_output=True, text=True, env=env, timeout=120)
+
+        r = run("-c", "import sys; from procheiron.init import main; sys.exit(main(['--root', sys.argv[1]]))", str(root))
+        if r.returncode != 0:
+            return bad(f"init failed: {(r.stderr or r.stdout).strip()[:180]}")
+        r = run(str(root / "memory_propose.py"), "--root", str(root),
+                "--created-by", "alice", "--type", "decision", "--scope", "project",
+                "--subject", "retry policy", "--statement", "Retries use exponential backoff.",
+                "--source-path", "docs/decisions.md", "--confidence", "0.9")
+        if r.returncode != 0:
+            return bad(f"propose failed (installed-package fallback broken?): {r.stderr.strip()[:180]}")
+        mem_id = json.loads((root / "memory" / "index" / "memories.jsonl")
+                            .read_text(encoding="utf-8").strip().splitlines()[-1])["id"]
+        r = run(str(root / "memory_promote.py"), "--root", str(root), "--memory-id", mem_id,
+                "--new-status", "active", "--reviewer", "alice", "--authorized-by", "casey",
+                "--reason", "self check", "--allow-unverified-reviewer")
+        if r.returncode == 0 or "self-review" not in r.stderr:
+            return bad(f"self-review was NOT refused (rc={r.returncode}): {r.stderr.strip()[:180]}")
+        r = run(str(root / "memory_promote.py"), "--root", str(root), "--memory-id", mem_id,
+                "--new-status", "active", "--reviewer", "bob", "--authorized-by", "casey",
+                "--reason", "verified against the source", "--allow-unverified-reviewer")
+        if r.returncode != 0:
+            return bad(f"independent promote failed: {r.stderr.strip()[:180]}")
+        r = run("-c", "import sys; from procheiron.cli import main; sys.argv=['procheiron','validate',sys.argv[1]]; main()", str(root))
+        if r.returncode != 0:
+            return bad(f"clean commons failed validation: {(r.stdout + r.stderr).strip()[:180]}")
+        audit = root / "memory" / "index" / "audit.jsonl"
+        lines = audit.read_text(encoding="utf-8").splitlines()
+        ev = json.loads(lines[-1])
+        ev["actor"] = "rogue"
+        lines[-1] = json.dumps(ev, ensure_ascii=False, separators=(",", ":"))
+        audit.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        r = run("-c", "import sys; from procheiron.cli import main; sys.argv=['procheiron','validate',sys.argv[1]]; main()", str(root))
+        if r.returncode == 0:
+            return bad("TAMPER NOT CAUGHT: validation passed after rewriting an audit actor")
+        if "entry_hash mismatch" not in (r.stdout + r.stderr):
+            return bad(f"tamper failed for the wrong reason: {(r.stdout + r.stderr).strip()[:180]}")
+    return {"name": name, "kind": "guard", "ok": True,
+            "detail": "fresh scaffold: full loop works from the installed package; audit tamper caught"}
+
+
 # --------------------------------------------------------------- evaluate + main
 def evaluate(fx: Dict[str, Any], result: Dict[str, Any]) -> Dict[str, Any]:
     status, errors = result.get("status", "CRASH"), result.get("errors", []) or []
@@ -351,6 +413,7 @@ def main() -> int:
     results.append(check_version_consistency())  # pyproject version must match package __version__
     results.append(check_doctrine_currency())  # shipped constitution must carry current doctrine
     results.append(check_tool_currency())      # fixture/example tools must match adopter templates
+    results.append(check_pip_journey())        # a pip-only user's first session must work end to end
 
     passed = sum(1 for r in results if r["ok"])
     report = {"validator": "procheiron package (src/procheiron)", "passed": passed, "total": len(results),

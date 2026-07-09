@@ -5,6 +5,28 @@ All notable changes to this project are documented here. The format follows
 with the project's own rule that numbers are earned by conformance, not declared (see
 `CONTRIBUTING.md`).
 
+## [Unreleased]
+
+### Fixed
+- A commons scaffolded by `procheiron init` now works from a plain pip install: the adopter
+  tools (`memory_propose.py`, `memory_promote.py`) fall back to the installed `procheiron`
+  package when a deployment ships no pinned `.procheiron/lib` (a deployment's own lib still
+  wins when present).
+- `memory_propose.py` hash-chains its audit event exactly like `memory_promote.py`, so a
+  fresh commons is chained from genesis instead of starting with an unchained event.
+- Tamper-evident by default, for real: `procheiron init` scaffolds a lint profile with
+  `verify_audit_chain: true`, and minimal-tier `procheiron validate` honors it — rewriting a
+  past audit event in a fresh scaffold now fails validation (it silently passed before).
+- Conformance subprocesses use `sys.executable` instead of a hardcoded `python3`, and the
+  default read-log path is computed portably.
+
+### Added
+- Conformance guard for the pip-only first session: init → propose → self-review refused →
+  independent promote → validate PASS → tamper → caught. 19/19 base.
+- CI runs the stdlib conformance matrix on Windows and macOS as well as Linux.
+- Issue templates (bug report, deployment report) and GitHub Discussions.
+- `procheiron init` prints a propose/promote quickstart with the independence rule.
+
 ## [0.2.1] — 2026-07-09
 
 Documentation and fixture-hygiene release; no behavior changes.

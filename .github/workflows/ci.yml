@@ -7,33 +7,41 @@ on:
 
 jobs:
   # The governance core is stdlib-only: conformance + smoke tests must pass with
-  # ZERO dependencies installed. Signature checks self-skip here (no cryptography).
+  # ZERO dependencies installed, on every OS the stdlib claim implies.
+  # Signature checks self-skip here (no cryptography).
   base-stdlib:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
       matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
         python: ["3.9", "3.12"]
+        exclude:
+          - os: macos-latest   # no arm64 build of 3.9 on the arm macos runners
+            python: "3.9"
+    defaults:
+      run:
+        shell: bash
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python }}
       - name: Conformance (stdlib, zero runtime deps)
-        run: python3 conformance/run_conformance.py
+        run: python conformance/run_conformance.py
       - name: Smoke tests
         run: |
-          PYTHONPATH=src python3 conformance/test_crypto_smoke.py
-          PYTHONPATH=src python3 conformance/test_policy_smoke.py
-          PYTHONPATH=src python3 conformance/test_mcp_smoke.py
-          PYTHONPATH=src python3 conformance/test_scorecard_smoke.py
+          PYTHONPATH=src python conformance/test_crypto_smoke.py
+          PYTHONPATH=src python conformance/test_policy_smoke.py
+          PYTHONPATH=src python conformance/test_mcp_smoke.py
+          PYTHONPATH=src python conformance/test_scorecard_smoke.py
 
   # With the optional crypto extra, the signature fixtures run for real — the
   # signed audit log must verify and a forged signature must be caught.
   crypto:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: Install crypto extra
@@ -52,8 +60,8 @@ jobs:
   policy-opa:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: Install OPA

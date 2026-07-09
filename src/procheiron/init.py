@@ -9,6 +9,7 @@ IDEMPOTENT: safe to re-run. Never overwrites an existing non-empty file unless
 
 What is created:
     .procheiron/config.yaml          — version 0.1, given profile, minimal paths
+    .procheiron/profiles/<profile>/lint.json — verify_audit_chain on (tamper-evident by default)
     console/CONSOLE.md               — doctrine one-pager (all 5 validator terms)
     memory/SCHEMA.md                 — memory record schema documentation
     memory/index/memories.jsonl      — empty index (zero records is valid)
@@ -38,6 +39,15 @@ root: .
 paths:
   console: console
   memory: memory
+"""
+
+# The README promises tamper-evidence by default; the scaffold must deliver it.
+# Chain verification is stdlib-only, so there is no dependency reason to leave
+# it off. Signature flags stay opt-in (they need the [crypto] extra and keys).
+LINT_JSON = """\
+{
+  "verify_audit_chain": true
+}
 """
 
 CONSOLE_MD = """\
@@ -302,6 +312,13 @@ def main(argv=None) -> int:
     results["memory_promote.py"] = r
     _status_line(r, "memory_promote.py")
 
+    # 11. lint profile — audit-chain verification ON, so `procheiron validate`
+    # catches a tampered audit log out of the box.
+    lint_rel = f".procheiron/profiles/{profile}/lint.json"
+    r = _write_file(root / ".procheiron" / "profiles" / profile / "lint.json", LINT_JSON, args.force)
+    results[lint_rel] = r
+    _status_line(r, lint_rel)
+
     print()
 
     # Summary
@@ -317,6 +334,15 @@ def main(argv=None) -> int:
     print(f"Validate with:")
     print(f"  procheiron validate {root}")
     print(f"  (or, without the CLI:  python3 {root}/validate_minimal.py --root {root} --json)")
+    print()
+    print(f"First record (from inside {root}):")
+    print(f"  python3 memory_propose.py --created-by alice --type decision --scope project \\")
+    print(f"      --subject 'retry policy' --statement 'Retries use exponential backoff.' \\")
+    print(f"      --source-path docs/decisions.md --confidence 0.9")
+    print(f"  python3 memory_promote.py --memory-id <id> --new-status active --reviewer bob \\")
+    print(f"      --authorized-by casey --reason 'verified against the source' --allow-unverified-reviewer")
+    print(f"  (promotion by the record's author is refused — review must be independent;")
+    print(f"   drop --allow-unverified-reviewer once you register actors in adapters.jsonl)")
 
     return 0
 

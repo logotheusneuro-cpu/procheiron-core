@@ -49,7 +49,9 @@ def _bootstrap_lib() -> Tuple[Any, Any]:
     fall-through let a tool invoked with `--root <vault-without-lib>` import and
     execute code from whatever `.procheiron/lib` happened to sit above the cwd
     (review finding M-1, code execution from an ambient directory). Ambient
-    ancestor discovery is used only when no root is specified at all.
+    ancestor discovery is used only when no root is specified at all. If no lib
+    tree exists at all, fall back to the installed procheiron package (fresh
+    scaffolds).
     """
     explicit: List[Path] = []
     env_lib = os.environ.get("PROCHEIRON_LIB")
@@ -77,10 +79,21 @@ def _bootstrap_lib() -> Tuple[Any, Any]:
             import procheiron_resolve  # type: ignore
             import procheiron_patterns  # type: ignore
             return procheiron_resolve, procheiron_patterns
+    try:
+        # No deployment-pinned lib anywhere: fall back to the installed procheiron
+        # package — the canonical source of these same modules — so a fresh
+        # `procheiron init` scaffold works from a plain pip install. A deployment
+        # that ships its own .procheiron/lib always wins above.
+        from procheiron import patterns as procheiron_patterns  # type: ignore
+        from procheiron import resolve as procheiron_resolve  # type: ignore
+        return procheiron_resolve, procheiron_patterns
+    except ImportError:
+        pass
     print(
         "memory_promote: REFUSED — no complete Procheiron lib found at the specified root "
         "(need procheiron_resolve.py + procheiron_patterns.py under <root>/.procheiron/lib; "
-        "pass --root, set PROCHEIRON_ROOT/PROCHEIRON_LIB, or run under an installed tree)",
+        "pass --root, set PROCHEIRON_ROOT/PROCHEIRON_LIB, run under an installed tree, "
+        "or `pip install procheiron`)",
         file=sys.stderr,
     )
     sys.exit(1)
