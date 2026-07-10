@@ -218,6 +218,24 @@ def _ensure_empty_jsonl(path: Path, force: bool) -> str:
     return "created"
 
 
+def _has_unchained_audit(root: Path) -> bool:
+    """True if an audit log exists with events that are NOT hash-chained (the first
+    real event carries no entry_hash). Used to refuse silently enabling chain
+    verification over a legacy log on a re-run of init."""
+    audit = root / "memory" / "index" / "audit.jsonl"
+    if not audit.is_file():
+        return False
+    import json as _json
+    for line in audit.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        try:
+            return "entry_hash" not in _json.loads(line)
+        except ValueError:
+            return True  # unparseable existing log — don't touch its verdict
+    return False
+
+
 def _status_line(action: str, rel: str) -> None:
     if action == "created":
         print(f"  CREATED  {rel}")
@@ -313,11 +331,23 @@ def main(argv=None) -> int:
     _status_line(r, "memory_promote.py")
 
     # 11. lint profile — audit-chain verification ON, so `procheiron validate`
-    # catches a tampered audit log out of the box.
+    # catches a tampered audit log out of the box. But NEVER switch it on over a
+    # pre-existing UNCHAINED audit log: re-running init on a legacy commons would
+    # silently flip its verdict. Enabling the chain there is a migration, not a
+    # scaffold step — refuse and tell the operator.
     lint_rel = f".procheiron/profiles/{profile}/lint.json"
-    r = _write_file(root / ".procheiron" / "profiles" / profile / "lint.json", LINT_JSON, args.force)
-    results[lint_rel] = r
-    _status_line(r, lint_rel)
+    lint_path = root / ".procheiron" / "profiles" / profile / "lint.json"
+    if not lint_path.is_file() and _has_unchained_audit(root):
+        print(f"  SKIPPED  {lint_rel}")
+        print(f"           existing audit log is not hash-chained — enabling "
+              f"verify_audit_chain\n           now would change this deployment's verdict. "
+              f"Migrate the log first,\n           then add the lint flag by hand. (See "
+              f"PORTING_GUIDE.md.)")
+        results[lint_rel] = "skipped"
+    else:
+        r = _write_file(lint_path, LINT_JSON, args.force)
+        results[lint_rel] = r
+        _status_line(r, lint_rel)
 
     print()
 

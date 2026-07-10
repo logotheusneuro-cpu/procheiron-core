@@ -108,14 +108,25 @@ def _load_memories(root: Path) -> List[Dict[str, Any]]:
     return out
 
 
+# A trusted record is one that cleared independent review. The default read path
+# returns ONLY these — an agent must not silently consume a memory Procheiron is
+# meant to be quarantining. Unreviewed records are reachable only on explicit
+# request (status="candidate", or include_untrusted=True).
+TRUSTED_STATUSES = ("active", "validated")
+
+
 def search_memories(root: Path, query: str = "", status: Optional[str] = None,
                     scope: Optional[str] = None, mtype: Optional[str] = None,
-                    limit: int = 20) -> List[Dict[str, Any]]:
+                    limit: int = 20, include_untrusted: bool = False) -> List[Dict[str, Any]]:
     q = (query or "").lower()
     res = []
     for m in _load_memories(root):
-        if status and m.get("status") != status:
-            continue
+        st = m.get("status")
+        if status:
+            if st != status:
+                continue
+        elif not include_untrusted and st not in TRUSTED_STATUSES:
+            continue  # default: trusted-only
         if scope and m.get("scope") != scope:
             continue
         if mtype and m.get("type") != mtype:
@@ -206,11 +217,17 @@ def read_canon(root: Path, doc: str) -> Optional[str]:
 # ---------------------------------------------------------------- MCP wire layer
 
 TOOLS = [
-    {"name": "memory.search", "description": "Search Procheiron memory records (read-only).",
+    {"name": "memory.search",
+     "description": "Search Procheiron memory records (read-only). Returns only TRUSTED "
+                    "(active/validated) records by default; pass status='candidate' or "
+                    "include_untrusted=true to see records that have not cleared review.",
      "inputSchema": {"type": "object", "properties": {
          "query": {"type": "string"}, "status": {"type": "string"}, "scope": {"type": "string"},
-         "type": {"type": "string"}, "limit": {"type": "integer"}}}},
-    {"name": "memory.get", "description": "Get one memory record by id (read-only).",
+         "type": {"type": "string"}, "limit": {"type": "integer"},
+         "include_untrusted": {"type": "boolean"}}}},
+    {"name": "memory.get",
+     "description": "Get one memory record by id (read-only). Returns the record with its "
+                    "status field; an untrusted record is only returned because you named it.",
      "inputSchema": {"type": "object", "required": ["memory_id"],
                      "properties": {"memory_id": {"type": "string"}}}},
     {"name": "memory.propose", "description": "Append a CANDIDATE memory (proposal-only, via the sanctioned writer).",
@@ -303,7 +320,8 @@ def handle_request(req: Dict[str, Any], root: Path, actor: str, allow_writes: bo
 def dispatch_tool(name: str, args: Dict[str, Any], root: Path, actor: str, allow_writes: bool) -> Any:
     if name == "memory.search":
         return search_memories(root, args.get("query", ""), args.get("status"), args.get("scope"),
-                               args.get("type"), int(args.get("limit", 20)))
+                               args.get("type"), int(args.get("limit", 20)),
+                               bool(args.get("include_untrusted", False)))
     if name == "memory.get":
         return get_memory(root, args["memory_id"]) or {"error": "not found"}
     if name == "memory.propose":

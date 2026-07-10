@@ -39,6 +39,16 @@ def main() -> int:
     # reads pull from the fixture's memory/index/memories.jsonl
     assert m.search_memories(ROOT, limit=5), "expected fixture memory records"
 
+    # trusted-consumption boundary: the DEFAULT read path serves only reviewed
+    # records — an agent must never silently consume an unreviewed candidate.
+    default = m.search_memories(ROOT)
+    assert all(r.get("status") in m.TRUSTED_STATUSES for r in default), \
+        f"default search leaked untrusted statuses: {sorted({r.get('status') for r in default})}"
+    everything = m.search_memories(ROOT, include_untrusted=True)
+    assert len(everything) >= len(default), (len(everything), len(default))
+    # any candidate is reachable ONLY when asked for explicitly
+    assert all(r.get("status") == "candidate" for r in m.search_memories(ROOT, status="candidate"))
+
     # promote GATE denies an under-reviewed transition; nothing is written
     res = m.promote_memory(ROOT, "smoke", "x", "active", "r", "memory_reviewer_curator",
                            [], "a", "wrong_role", "t", "validated", "active", allow_writes=False)

@@ -227,6 +227,12 @@ def _append_audit_event(path: Path, event: Dict[str, Any]) -> None:
     if _chain is not None:
         _chain.append_event(path, event, key_hex=os.environ.get("PROCHEIRON_SIGNING_KEY") or None)
     else:
+        # The chain helper ships in the package and is stdlib-only, so its absence
+        # means a broken/partial install. Do not fail SILENTLY to an unchained
+        # event — that leaves a gap a later verify can't explain. Warn loudly.
+        print("memory_promote: WARNING — hash-chain helper unavailable; appending an "
+              "UNCHAINED audit event. Reinstall procheiron so the audit log stays "
+              "tamper-evident.", file=sys.stderr)
         append_jsonl(path, event)
 
 

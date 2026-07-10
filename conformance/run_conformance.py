@@ -370,6 +370,20 @@ def check_pip_journey() -> Dict[str, Any]:
         r = run("-c", "import sys; from procheiron.cli import main; sys.argv=['procheiron','validate',sys.argv[1]]; main()", str(root))
         if r.returncode != 0:
             return bad(f"clean commons failed validation: {(r.stdout + r.stderr).strip()[:180]}")
+        # case-variant self-review must be caught by the minimal tier too: flip the
+        # creator to an UPPER-CASE variant of the reviewer — still the same person.
+        mems = root / "memory" / "index" / "memories.jsonl"
+        mlines = mems.read_text(encoding="utf-8").splitlines()
+        rec = json.loads(mlines[-1]); orig_creator = rec.get("created_by")
+        rec["created_by"] = str(rec.get("reviewed_by") or "").upper()
+        mlines[-1] = json.dumps(rec, ensure_ascii=False, separators=(",", ":"))
+        mems.write_text("\n".join(mlines) + "\n", encoding="utf-8")
+        r = run("-c", "import sys; from procheiron.cli import main; sys.argv=['procheiron','validate',sys.argv[1]]; main()", str(root))
+        if r.returncode == 0:
+            return bad("CASE-VARIANT SELF-REVIEW NOT CAUGHT: an upper-cased creator passed review")
+        rec["created_by"] = orig_creator
+        mlines[-1] = json.dumps(rec, ensure_ascii=False, separators=(",", ":"))
+        mems.write_text("\n".join(mlines) + "\n", encoding="utf-8")
         audit = root / "memory" / "index" / "audit.jsonl"
         lines = audit.read_text(encoding="utf-8").splitlines()
         ev = json.loads(lines[-1])
@@ -382,7 +396,7 @@ def check_pip_journey() -> Dict[str, Any]:
         if "entry_hash mismatch" not in (r.stdout + r.stderr):
             return bad(f"tamper failed for the wrong reason: {(r.stdout + r.stderr).strip()[:180]}")
     return {"name": name, "kind": "guard", "ok": True,
-            "detail": "fresh scaffold: full loop works from the installed package; audit tamper caught"}
+            "detail": "fresh scaffold: full loop works from pip; case-variant self-review + audit tamper both caught"}
 
 
 # --------------------------------------------------------------- evaluate + main

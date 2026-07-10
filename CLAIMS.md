@@ -5,10 +5,12 @@ standard we ask of any memory: a claim counts as proven only with cited, reprodu
 Everything else gets labeled for what it is. One rule governs the whole file: no "production-ready"
 or "production-replicable" claim until a second real deployment passes conformance.
 
-- Last updated: 2026-07-06
-- Published package: `procheiron` **0.2.0** (PyPI, sdist + wheel) — the tamper-evident hash-chained
-  audit log plus optional ed25519 signing. 0.1.0 remains installable pinned but predates the chain.
-  Rows below say which version each claim holds for.
+- Last updated: 2026-07-10
+- Published package: `procheiron` **0.2.2** (PyPI, sdist + wheel) — tamper-evident hash-chained
+  audit log plus optional ed25519 signing; 0.2.1/0.2.2 added the branded README, the pip-only
+  first-run fixes, and cross-OS CI. 0.1.0 remains installable pinned but predates the chain.
+  Rows below say which version each claim holds for. (An external independent audit on 2026-07-09
+  drove the trusted-read and minimal-validator fixes below; those land in the next release.)
 
 ---
 
@@ -41,6 +43,14 @@ or "production-replicable" claim until a second real deployment passes conforman
 | **Trust-loop longevity unproven** | A 30-day continuous trust-loop run (promotions + recorded blocks) is not yet complete. Checkpoint ~2026-07-26. |
 | **Single-trust-domain limit (chain + signing)** | `verify_chain` checks only *internal* continuity, so a writer can rebuild the whole chain from GENESIS; and `known_actor_keys` (the public-key registry) lives in the same writable profile, so an insider who can write the audit log can also re-register fresh keys and re-sign the rewrite (red-team Attack #1, reproduced). Chain + signing therefore close the dual-write forgery **only with BOTH** (a) an externally-anchored head (`validate --expect-head <hex>`, git-pinned) **and** (b) the key registry out of the writer's write scope (separate OS user / HSM / Sigstore keyless). On one shared machine without those, you get tamper-**evidence** (detectable via the anchor), not tamper-**prevention**. Private keys on a shared filesystem are additionally only as strong as their file permissions. |
 | **Crypto not yet in the live deployment** | The tamper-evident chain + optional signing are proven in the package + conformance; the authors' own live deployment has **not yet migrated** its audit log onto the chain (an available follow-up, kept separate to avoid disturbing a running system). |
+| **Tail truncation needs the anchor** | Deleting the *newest* audit events is the one edit the hash chain alone cannot see (`chain.py` verifies internal continuity, which a truncated log still has). It is caught only with an externally-anchored head (`validate --expect-head <hex>`). Editing or reordering any existing event is caught by the chain unconditionally. |
+
+## Fixed after the 2026-07-09 independent audit (in the next release, not yet on PyPI)
+
+| Fix | What was wrong | Evidence |
+| --- | --- | --- |
+| **MCP reads are trusted-by-default** | `memory.search` with no `status` returned unreviewed `candidate` records — an agent could consume exactly what the review gate is meant to quarantine. Now returns only `active`/`validated` by default; candidates need an explicit `status` or `include_untrusted=true`. | `mcp_server.py` `TRUSTED_STATUSES`; conformance pip-journey asserts the default search hides a fresh candidate |
+| **Minimal validator enforces independent review properly** | The minimal tier compared actors with raw `==` (so `BOB` passed review against `bob`) and only checked that *a* promotion event existed, not that its actor was the independent reviewer. Now NFKC+casefolds identities and checks the promoting actor is neither the creator nor a mismatch for `reviewed_by` — matching the full tier. | `validate_minimal.py` `_norm_actor`; conformance negative fixture for a case-variant self-review |
 
 ## Discipline
 

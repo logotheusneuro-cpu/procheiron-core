@@ -6,7 +6,7 @@ Get from zero to a validator-passing Procheiron memory commons in 3 commands.
 
 ## What You Get
 
-Running `procheiron_init.py` creates 10 files under your chosen root:
+Running `procheiron init` creates 11 files under your chosen root:
 
 ```
 <root>/
@@ -25,6 +25,8 @@ Running `procheiron_init.py` creates 10 files under your chosen root:
   procheiron_schema.py          ← validator helper (required by validate_minimal.py)
   memory_propose.py             ← candidate-record append helper (see note below)
   memory_promote.py             ← status promotion gate (see note below)
+  .procheiron/
+    profiles/<profile>/lint.json ← turns on verify_audit_chain (tamper-evident by default)
 ```
 
 **What init gives you:** a minimal 5-file memory commons (config + CONSOLE.md +
@@ -40,18 +42,15 @@ See the "Adding Governance" section at the bottom for where those are added.
 
 ## Prerequisites
 
-- Python 3.8+ (stdlib only — no pip installs needed for validator)
-- The `procheiron_init.py` script (located in the `init/` directory of the
-  Procheiron Core package)
+- Python 3.9+ (the commons and its validator are stdlib-only)
+- `pip install procheiron` (the CLI ships the scaffolder and the validator)
 
 ---
 
 ## Step 1 — Scaffold the tree
 
 ```bash
-python3 /path/to/procheiron_core/init/procheiron_init.py \
-    --root /your/project/root \
-    --profile yourprofilename
+procheiron init /your/project/root --profile yourprofilename
 ```
 
 Replace `/your/project/root` with the directory you want to initialize (will be
@@ -73,8 +72,9 @@ Procheiron v0.1 init → /your/project/root  (profile='yourprofilename')
   CREATED  procheiron_schema.py
   CREATED  memory_propose.py
   CREATED  memory_promote.py
+  CREATED  .procheiron/profiles/yourprofilename/lint.json
 
-Done: 10 created, 0 skipped, 0 overwritten.
+Done: 11 created, 0 skipped, 0 overwritten.
 ```
 
 If you re-run without `--force`, every file is reported as `SKIPPED (already
@@ -110,13 +110,11 @@ The most common causes and fixes are in the Troubleshooting section below.
 ## Step 3 — Confirm idempotency (optional but recommended)
 
 ```bash
-python3 /path/to/procheiron_core/init/procheiron_init.py \
-    --root /your/project/root \
-    --profile yourprofilename
+procheiron init /your/project/root --profile yourprofilename
 ```
 
 Every file should be reported as `SKIPPED (already present)`. Summary line:
-`Done: 0 created, 10 skipped, 0 overwritten.`
+`Done: 0 created, 11 skipped, 0 overwritten.`
 
 ---
 
@@ -250,7 +248,7 @@ fixture in the Procheiron Core package. Use it as a reference.
 ## Re-initializing or Force-overwriting
 
 ```bash
-python3 procheiron_init.py --root <dir> --profile <name> --force
+procheiron init <dir> --profile <name> --force
 ```
 
 `--force` overwrites every existing non-empty file. Use with care: it will

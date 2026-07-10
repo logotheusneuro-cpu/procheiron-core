@@ -26,9 +26,9 @@ one of them can write a "fact" the others will happily build on — nobody revie
 approved it, and when it turns out to be wrong there's no clean way to trace it or retire it.
 
 Procheiron adds that discipline, and enforces it with a validator rather than a convention. It
-stores nothing and retrieves nothing: bring whatever memory you already use — a vector database,
-a knowledge graph, a folder of markdown files. It governs the records; your engine keeps doing
-the remembering.
+adds no memory engine of its own — no embeddings, no ranking, no recall. Bring whatever memory
+you already use — a vector database, a knowledge graph, a folder of markdown files. It governs
+the records; your engine keeps doing the remembering.
 
 ## Caught in the act
 
@@ -132,7 +132,9 @@ everywhere else: the agent that wrote a memory cannot approve it.
    ```
 
 3. Every step lands in an append-only audit log whose entries are hash-chained (BLAKE2b, pure
-   standard library). Editing, reordering, or deleting a past event breaks the chain.
+   standard library). Editing or reordering any past event breaks the chain. Deleting from the
+   end (tail truncation) is the one edit the chain alone can't see — pin the head externally
+   with `--expect-head` and that's caught too (see below).
 4. Want authorship you can verify cryptographically? Install the crypto extra and sign entries
    with ed25519. A signature check that cannot run is a hard error, never a silent pass.
 
@@ -143,13 +145,15 @@ What you'd otherwise do for trust in agent memory:
 |  | Enforced independent review | Tamper-evident history | Works with any store | Setup |
 |---|---|---|---|---|
 | Convention docs ("agents should…") | no — honor system | no | — | none |
-| Git history on the memory files | no | partial — rewritable | yes | none |
+| Git history on the memory files | no | yes — unless the history itself is rewritten | the files, not your store | none |
 | Your memory engine's metadata | no — self-asserted | no | that engine only | none |
 | Full provenance stack (W3C PROV + signing infra) | possible | yes | yes | weeks |
-| **Procheiron** | **yes — validator-refused** | **yes — hash chain + external anchor** | **yes — bring your own** | **pip install** |
+| **Procheiron** | **yes — validator-refused** | **yes — plus a hash chain; a full rewrite needs an external anchor** | **yes — bring your own** | **`pip install`; anchor + key custody for the strongest guarantee** |
 
-Memory engines are not the competition — Procheiron governs the records they hold and will never
-grow retrieval of its own.
+Git already gives you tamper-evidence on the same assumption Procheiron makes (nobody rewrites the
+anchor) — the difference is the **enforced review gate** and record-level structure git has no
+notion of. And memory engines aren't the competition: Procheiron governs the records they hold and
+will never grow retrieval of its own.
 
 ## Commands
 

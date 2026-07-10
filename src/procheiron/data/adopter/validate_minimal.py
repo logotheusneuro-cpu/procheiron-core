@@ -23,12 +23,21 @@ import argparse
 import json
 import re
 import sys
+import unicodedata
 from pathlib import Path
 from typing import Any, Dict, List
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import procheiron_schema as pschema  # noqa: E402  (shipped beside the validator)
+
+
+def _norm_actor(value: Any) -> str:
+    """Normalized identity for comparison: strip + NFKC + casefold — same rule as the
+    full validator's norm_actor, so 'BOB' cannot pass independent review against 'bob'."""
+    if not isinstance(value, str):
+        return ""
+    return unicodedata.normalize("NFKC", value.strip()).casefold()
 
 DOCTRINE = {
     "agent_neutral": ["agent-neutral"],
@@ -135,14 +144,27 @@ def main() -> int:
                 errors.append(f"{rid}: machine-absolute source_path {sp!r}")
         status = str(r.get("status") or "")
         if status in LIVE:
-            creator, reviewer = str(r.get("created_by") or ""), str(r.get("reviewed_by") or "")
+            creator = _norm_actor(r.get("created_by"))
+            reviewer = _norm_actor(r.get("reviewed_by"))
             if not reviewer:
                 errors.append(f"{rid}: {status} record has no reviewed_by")
             elif reviewer == creator:
                 errors.append(f"{rid}: {status} record self-reviewed by its creator")
             action = "memory_promoted" if status == "active" else "memory_validated"
-            if promo_actor.get((rid, action)) is None:
+            promoter = promo_actor.get((rid, action))
+            if promoter is None:
                 errors.append(f"{rid}: {status} record has no corroborating {action} audit event")
+            else:
+                # The promotion event's actor must BE the independent reviewer, not the
+                # creator — otherwise a record can claim reviewed_by:bob while alice
+                # actually promoted it (full validator checks this; minimal must too).
+                np = _norm_actor(promoter)
+                if np == creator:
+                    errors.append(f"{rid}: {status} record promoted by its own creator "
+                                  f"({promoter!r}) — not independent review")
+                elif reviewer and np != reviewer:
+                    errors.append(f"{rid}: {status} record's {action} actor ({promoter!r}) "
+                                  f"does not match reviewed_by ({r.get('reviewed_by')!r})")
 
     # secret + console scan
     for base in (console, memory):

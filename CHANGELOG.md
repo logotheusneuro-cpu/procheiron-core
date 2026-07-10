@@ -5,20 +5,41 @@ All notable changes to this project are documented here. The format follows
 with the project's own rule that numbers are earned by conformance, not declared (see
 `CONTRIBUTING.md`).
 
-## [Unreleased]
+## [0.2.3] — 2026-07-10
 
-### Fixed
-- `procheiron mcp` accepts a positional root (`procheiron mcp ./commons`), matching `init` and
-  `validate`; `--root` keeps working. The MCP server now reports the real package version in
-  `initialize` (it was hardcoded to 0.1.0).
+Trust-boundary release. An external independent audit found that the enforcement had real gaps
+behind the working happy path; this closes them.
 
-### Changed
-- README restructured around a runnable 60-second tamper demo (pip-only, no clone), an agent
-  wiring section (MCP config for Claude Code / any `mcpServers` client), a "How it compares"
-  table, a collapsed full threat model, and exit-path/"good for today" answers in the FAQ.
-- Added `INSTALL_FOR_AGENTS.md`: a one-instruction install path a coding agent can execute —
-  install, scaffold, prove the tamper catch, wire itself in over MCP (writes stay
-  operator-gated), and report back.
+### Fixed (security / correctness)
+- **Trusted-consumption boundary on reads.** The MCP `memory.search` tool returned unreviewed
+  `candidate` records by default — an agent could consume exactly what the review gate is meant
+  to quarantine. It now returns only `active`/`validated` records by default; candidates require
+  an explicit `status` or `include_untrusted=true`.
+- **Minimal validator enforces independent review properly.** It compared actors with raw `==`
+  (so `BOB` cleared review against `bob`) and only checked that *a* promotion event existed, not
+  that its actor was the reviewer. It now NFKC+casefolds identities and verifies the promoting
+  actor is neither the creator nor a mismatch for `reviewed_by` — matching the full tier.
+- **`procheiron mcp` accepts a positional root** (`procheiron mcp ./commons`), matching `init`
+  and `validate`; the MCP server reports the real package version (was hardcoded `0.1.0`).
+- **`init` no longer changes a legacy deployment's verdict.** Re-running `procheiron init` on a
+  commons whose audit log is not hash-chained refuses to add the `verify_audit_chain` lint
+  (which would flip its result); it prints a migration note instead.
+- Scaffolded writers no longer fall back **silently** to an unchained audit append when the
+  chain helper is missing — they warn loudly (a missing stdlib helper means a broken install).
+
+### Changed / removed
+- Removed the broken standalone `init/procheiron_init.py` (it could not locate the adopter
+  files, scaffolded an incomplete tree, and printed a validate command for a file it never
+  created). `procheiron init` is the one scaffold path; `PORTING_GUIDE.md` updated to match.
+- README honesty pass: "adds no memory engine of its own" replaces the overclaimed "stores
+  nothing"; the how-it-works note is precise that tail truncation is caught only with an
+  external anchor; the comparison table no longer wins every cell (git ties on tamper-evidence)
+  and its setup column discloses the anchor + key-custody cost.
+- `CLAIMS.md` refreshed to 0.2.2/0.2.3 with the two fixes above and a tail-truncation caveat.
+
+### Added
+- Conformance: MCP smoke asserts the trusted-by-default read boundary; the pip-journey guard
+  asserts a case-variant self-review is refused. 19/19 base.
 
 ## [0.2.2] — 2026-07-09
 
