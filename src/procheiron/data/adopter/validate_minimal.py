@@ -129,8 +129,21 @@ def main() -> int:
                     audit.append(json.loads(line))
                 except json.JSONDecodeError:
                     pass
-    promo_actor = {(e.get("memory_id"), str(e.get("action", ""))): e.get("actor")
-                   for e in audit}
+    # A record's `status` is mutable text; trust is only as good as the LATEST
+    # lifecycle transition recorded for it in the append-only audit log (in file
+    # order, last matching event wins). A stale promotion must not vouch for a record
+    # that was later archived/superseded and flipped back to active.
+    action_status = {
+        "memory_candidate_proposed": "candidate", "memory_validated": "validated",
+        "memory_promoted": "active", "memory_superseded": "superseded",
+        "memory_archived": "archived", "memory_disputed": "disputed",
+    }
+    last_transition: Dict[str, Any] = {}  # memory_id -> (status, actor)
+    for e in audit:
+        mid = e.get("memory_id")
+        act = str(e.get("action", ""))
+        if mid and act in action_status:
+            last_transition[mid] = (action_status[act], e.get("actor"))
 
     for r in records:
         rid = r.get("id", "<none>")
@@ -150,21 +163,24 @@ def main() -> int:
                 errors.append(f"{rid}: {status} record has no reviewed_by")
             elif reviewer == creator:
                 errors.append(f"{rid}: {status} record self-reviewed by its creator")
-            action = "memory_promoted" if status == "active" else "memory_validated"
-            promoter = promo_actor.get((rid, action))
-            if promoter is None:
-                errors.append(f"{rid}: {status} record has no corroborating {action} audit event")
+            lt = last_transition.get(rid)
+            if lt is None:
+                errors.append(f"{rid}: {status} record has no lifecycle transition in the audit log")
             else:
-                # The promotion event's actor must BE the independent reviewer, not the
-                # creator — otherwise a record can claim reviewed_by:bob while alice
-                # actually promoted it (full validator checks this; minimal must too).
-                np = _norm_actor(promoter)
-                if np == creator:
-                    errors.append(f"{rid}: {status} record promoted by its own creator "
-                                  f"({promoter!r}) — not independent review")
-                elif reviewer and np != reviewer:
-                    errors.append(f"{rid}: {status} record's {action} actor ({promoter!r}) "
-                                  f"does not match reviewed_by ({r.get('reviewed_by')!r})")
+                lt_status, lt_actor = lt
+                if lt_status != status:
+                    # e.g. record says active but the latest recorded transition is
+                    # archived — forged or stale status.
+                    errors.append(f"{rid}: status {status!r} does not match the latest audit "
+                                  f"transition ({lt_status!r}) — forged or stale status")
+                else:
+                    np = _norm_actor(lt_actor)
+                    if np == creator:
+                        errors.append(f"{rid}: {status} record promoted by its own creator "
+                                      f"({lt_actor!r}) — not independent review")
+                    elif reviewer and np != reviewer:
+                        errors.append(f"{rid}: {status} record's promotion actor ({lt_actor!r}) "
+                                      f"does not match reviewed_by ({r.get('reviewed_by')!r})")
 
     # secret + console scan
     for base in (console, memory):

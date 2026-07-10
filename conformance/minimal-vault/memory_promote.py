@@ -214,26 +214,27 @@ def append_jsonl(path: Path, obj: Dict[str, Any]) -> None:
         os.close(fd)
 
 
-def _append_audit_event(path: Path, event: Dict[str, Any]) -> None:
-    """Append an audit event, hash-chaining it (and ed25519-signing it when
-    PROCHEIRON_SIGNING_KEY is set) via the installed procheiron package. Falls back
-    to a plain append when the package/chain helper is unavailable — the event is
-    then unchained, and a deployment running lint `verify_audit_chain` will flag it.
-    Preserves the writers' audit-line-first, atomic O_NOFOLLOW append discipline."""
+def _require_chain():
+    """Preflight BEFORE any write: the hash-chain helper is stdlib and ships in the
+    package, so its absence means a broken install. Refuse up front rather than
+    mutating the record + appending an unchained event and reporting success (which
+    leaves the deployment invalid). Nothing is written when this refuses.
+    # ponytail: fail closed unconditionally; 'success but invalid' is the worse failure."""
     try:
         from procheiron import chain as _chain  # type: ignore
+        return _chain
     except Exception:
-        _chain = None
-    if _chain is not None:
-        _chain.append_event(path, event, key_hex=os.environ.get("PROCHEIRON_SIGNING_KEY") or None)
-    else:
-        # The chain helper ships in the package and is stdlib-only, so its absence
-        # means a broken/partial install. Do not fail SILENTLY to an unchained
-        # event — that leaves a gap a later verify can't explain. Warn loudly.
-        print("memory_promote: WARNING — hash-chain helper unavailable; appending an "
-              "UNCHAINED audit event. Reinstall procheiron so the audit log stays "
-              "tamper-evident.", file=sys.stderr)
-        append_jsonl(path, event)
+        print("memory_promote: REFUSED — hash-chain helper unavailable; refusing to write an "
+              "unchained audit event (reinstall procheiron). Nothing was written.", file=sys.stderr)
+        sys.exit(1)
+
+
+def _append_audit_event(path: Path, event: Dict[str, Any]) -> None:
+    """Append an audit event, hash-chaining it (and ed25519-signing it when
+    PROCHEIRON_SIGNING_KEY is set). The chain helper is preflighted in main().
+    Preserves the writers' audit-line-first, atomic O_NOFOLLOW append discipline."""
+    _chain = _require_chain()
+    _chain.append_event(path, event, key_hex=os.environ.get("PROCHEIRON_SIGNING_KEY") or None)
 
 
 class Lock:
@@ -325,6 +326,8 @@ def main() -> None:
     memories_path = index_dir / "memories.jsonl"
     audit_path = index_dir / "audit.jsonl"
     supersessions_path = index_dir / "supersessions.jsonl"
+
+    _require_chain()  # preflight: refuse before any read-modify-write if we can't chain
 
     # Acquire the lock BEFORE reading: the read-modify-write cycle must be inside
     # the lock or a concurrent committed change is silently reverted by a stale

@@ -218,11 +218,33 @@ def _ensure_empty_jsonl(path: Path, force: bool) -> str:
     return "created"
 
 
+def _audit_path(root: Path) -> Path:
+    """Resolve the audit log path from config (paths.memory), not a hardcoded literal —
+    a deployment may place memory/ elsewhere."""
+    mem = "memory"
+    cfgp = root / ".procheiron" / "config.yaml"
+    if cfgp.is_file():
+        in_paths = False
+        for ln in cfgp.read_text(encoding="utf-8").splitlines():
+            if ln.strip() == "paths:":
+                in_paths = True
+                continue
+            if in_paths:
+                s = ln.strip()
+                if s.startswith("memory:"):
+                    mem = s.split(":", 1)[1].strip() or "memory"
+                    break
+                if s and not ln.startswith((" ", "\t")):
+                    break  # left the paths: block
+    return root / mem / "index" / "audit.jsonl"
+
+
 def _has_unchained_audit(root: Path) -> bool:
-    """True if an audit log exists with events that are NOT hash-chained (the first
-    real event carries no entry_hash). Used to refuse silently enabling chain
+    """True if the audit log has ANY event that is not hash-chained. Checks EVERY
+    event (a mixed log with a chained first event and an unchained tail is still
+    unchained), at the config-resolved path. Used to refuse silently enabling chain
     verification over a legacy log on a re-run of init."""
-    audit = root / "memory" / "index" / "audit.jsonl"
+    audit = _audit_path(root)
     if not audit.is_file():
         return False
     import json as _json
@@ -230,7 +252,8 @@ def _has_unchained_audit(root: Path) -> bool:
         if not line.strip():
             continue
         try:
-            return "entry_hash" not in _json.loads(line)
+            if "entry_hash" not in _json.loads(line):
+                return True
         except ValueError:
             return True  # unparseable existing log — don't touch its verdict
     return False
@@ -264,11 +287,25 @@ def main(argv=None) -> int:
     ap.add_argument("--profile", default="default",
                     help="Profile name written into config.yaml (default: 'default').")
     ap.add_argument("--force", action="store_true",
-                    help="Overwrite existing non-empty files (use with care).")
+                    help="Overwrite existing non-empty template files (config, CONSOLE, schema, tools).")
+    ap.add_argument("--reset-data", action="store_true",
+                    help="Additionally EMPTY existing memory/audit indexes. Destroys records — "
+                         "requires --force and is refused otherwise.")
     args = ap.parse_args(argv)
 
     root = Path(args.root).expanduser().resolve()
     profile = args.profile.strip() or "default"
+
+    # --force alone must NOT silently destroy a populated commons. Emptying the JSONL
+    # indexes needs the explicit --reset-data flag; back up first (they are plain files).
+    if args.force and not args.reset_data:
+        for rel in ("memory/index/memories.jsonl", "memory/index/audit.jsonl"):
+            p = root / rel
+            if p.is_file() and p.stat().st_size > 0:
+                print(f"REFUSED: --force would empty {rel} (it has data). Copy it somewhere "
+                      f"safe, then re-run with --force --reset-data to confirm.", file=sys.stderr)
+                return 2
+    reset_indexes = args.force and args.reset_data
 
     # Locate bundled adopter data (package-relative)
     adopter = Path(__file__).resolve().parent / "data" / "adopter"
@@ -294,13 +331,14 @@ def main(argv=None) -> int:
     results["memory/SCHEMA.md"] = r
     _status_line(r, "memory/SCHEMA.md")
 
-    # 4. memory/index/memories.jsonl  (empty — zero records is valid)
-    r = _ensure_empty_jsonl(root / "memory" / "index" / "memories.jsonl", args.force)
+    # 4. memory/index/memories.jsonl  (empty — zero records is valid). Only emptied
+    # under --force --reset-data (reset_indexes); plain --force never destroys data.
+    r = _ensure_empty_jsonl(root / "memory" / "index" / "memories.jsonl", reset_indexes)
     results["memory/index/memories.jsonl"] = r
     _status_line(r, "memory/index/memories.jsonl")
 
     # 5. memory/index/audit.jsonl  (empty)
-    r = _ensure_empty_jsonl(root / "memory" / "index" / "audit.jsonl", args.force)
+    r = _ensure_empty_jsonl(root / "memory" / "index" / "audit.jsonl", reset_indexes)
     results["memory/index/audit.jsonl"] = r
     _status_line(r, "memory/index/audit.jsonl")
 

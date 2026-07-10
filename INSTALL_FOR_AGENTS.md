@@ -5,7 +5,8 @@ Each step ends with a **gate**; do not continue past a failed gate — report it
 you finish, give your operator the report described at the end.
 
 Procheiron is a trust layer for agent memory: an enforced independent-review lifecycle plus a
-tamper-evident, hash-chained audit log. It stores nothing and retrieves nothing.
+tamper-evident, hash-chained audit log. It adds no memory engine of its own — no embeddings,
+no ranking, no recall — it governs the records your engine holds.
 
 ## 1. Install
 

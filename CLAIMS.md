@@ -6,11 +6,11 @@ Everything else gets labeled for what it is. One rule governs the whole file: no
 or "production-replicable" claim until a second real deployment passes conformance.
 
 - Last updated: 2026-07-10
-- Published package: `procheiron` **0.2.2** (PyPI, sdist + wheel) — tamper-evident hash-chained
-  audit log plus optional ed25519 signing; 0.2.1/0.2.2 added the branded README, the pip-only
-  first-run fixes, and cross-OS CI. 0.1.0 remains installable pinned but predates the chain.
-  Rows below say which version each claim holds for. (An external independent audit on 2026-07-09
-  drove the trusted-read and minimal-validator fixes below; those land in the next release.)
+- Published package: `procheiron` **0.2.4** (PyPI, sdist + wheel) — tamper-evident hash-chained
+  audit log plus optional ed25519 signing. 0.2.1/0.2.2 added the branded README, the pip-only
+  first-run fixes, and cross-OS CI; **0.2.3/0.2.4 close the trust-boundary gaps a second
+  independent audit (2026-07-09) found** (see below). 0.1.0 remains installable pinned but
+  predates the chain. Rows below say which version each claim holds for.
 
 ---
 
@@ -45,12 +45,25 @@ or "production-replicable" claim until a second real deployment passes conforman
 | **Crypto not yet in the live deployment** | The tamper-evident chain + optional signing are proven in the package + conformance; the authors' own live deployment has **not yet migrated** its audit log onto the chain (an available follow-up, kept separate to avoid disturbing a running system). |
 | **Tail truncation needs the anchor** | Deleting the *newest* audit events is the one edit the hash chain alone cannot see (`chain.py` verifies internal continuity, which a truncated log still has). It is caught only with an externally-anchored head (`validate --expect-head <hex>`). Editing or reordering any existing event is caught by the chain unconditionally. |
 
-## Fixed after the 2026-07-09 independent audit (in the next release, not yet on PyPI)
+## Trust-boundary fixes from the second independent audit (2026-07-09, shipped in 0.2.3/0.2.4)
+
+The first round of these was cosmetic — a second audit showed the "trusted read" filtered a
+mutable field and MCP promotion took the reviewer as a free string. These are the real fixes.
 
 | Fix | What was wrong | Evidence |
 | --- | --- | --- |
-| **MCP reads are trusted-by-default** | `memory.search` with no `status` returned unreviewed `candidate` records — an agent could consume exactly what the review gate is meant to quarantine. Now returns only `active`/`validated` by default; candidates need an explicit `status` or `include_untrusted=true`. | `mcp_server.py` `TRUSTED_STATUSES`; conformance pip-journey asserts the default search hides a fresh candidate |
-| **Minimal validator enforces independent review properly** | The minimal tier compared actors with raw `==` (so `BOB` passed review against `bob`) and only checked that *a* promotion event existed, not that its actor was the independent reviewer. Now NFKC+casefolds identities and checks the promoting actor is neither the creator nor a mismatch for `reviewed_by` — matching the full tier. | `validate_minimal.py` `_norm_actor`; conformance negative fixture for a case-variant self-review |
+| **MCP reviewer is the authenticated actor** | `memory.promote` took `reviewer`/`approver` as tool arguments, so a client bound as `alice` could promote alice's own record by passing `reviewer:"bob"`. The identity binding was discarded at the authority boundary. Now the reviewer/authorizer IS the bound `--actor`; a differing argument is rejected. | `mcp_server.py` `promote_memory` actor-binding; `check_trust_boundary` conformance guard |
+| **Trusted reads are evidence-derived, not status-filtered** | `memory.search` trusted `status` alone — flipping a candidate to `active` in place made it served. Now a record is served on the default path only if its status is backed by the audit log's latest transition (independent actor). `memory.get` returns an explicit `trusted` boolean. | `lifecycle.py`; `mcp_server.search_memories`/`get_memory`; `check_trust_boundary` forges an active record and asserts it is hidden |
+| **Latest-transition lifecycle check (both tiers)** | A stale promotion event vouched for a record later archived and flipped back to `active`. Both validators now require the record's status to equal the audit log's *latest* transition. | `validate.py` `latest_trans`; `validate_minimal.py`; reproduced archived→active now FAILs |
+| **Minimal validator casefold + promoter identity** | Raw `==` let `BOB` clear review against `bob`, and only checked a promotion event existed. Now NFKC+casefold + the promoter must be the independent reviewer. | `validate_minimal.py` `_norm_actor`; pip-journey case-variant guard |
+| **Writers preflight the chain, fail closed** | On a missing chain helper the writers appended an *unchained* event and reported success (invalid deployment). Now they refuse before writing anything. | `memory_promote.py`/`memory_propose.py` `_require_chain` |
+| **`init` won't flip a legacy verdict; `--force` won't destroy data** | Re-running `init` on an unchained log silently added the chain lint (now checks every event at the configured path and refuses); plain `--force` emptied the indexes (now needs `--reset-data`). | `init.py` `_has_unchained_audit`, `--reset-data` guard |
+| **Strict boolean on `include_untrusted`** | `include_untrusted:"false"` (a string) coerced to truthy and leaked candidates. Now only a real JSON `true` opens the untrusted view. | `mcp_server.py` `is True` check |
+
+### Still NOT closed (honest residual)
+| Limit | Detail |
+| --- | --- |
+| **Append-forgery needs signing** | Without `procheiron[crypto]` signing + `known_actor_keys` held out of the writer's reach, an insider with filesystem write access can APPEND a valid-looking, correctly-chained promotion event. The chain catches edits/reorders/deletes of past events, not a fresh forged append; the latest-transition check raises the bar but cannot close this in the no-signing case. This is the boundary between tamper-*evidence* and authenticated *provenance*. |
 
 ## Discipline
 

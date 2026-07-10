@@ -155,26 +155,27 @@ def append_line(path: Path, obj: dict) -> None:
         os.close(fd)
 
 
-def _append_audit_event(path: Path, event: dict) -> None:
-    """Append the audit event hash-chained (and ed25519-signed when
-    PROCHEIRON_SIGNING_KEY is set) via the installed procheiron package — same
-    discipline as memory_promote, so a fresh commons is chained from genesis.
-    Falls back to a plain append when the package/chain helper is unavailable;
-    a deployment running lint `verify_audit_chain` will flag the unchained event."""
+def _require_chain():
+    """Preflight BEFORE any write: the hash-chain helper is stdlib and ships in the
+    package, so its absence means a broken install. Refuse up front rather than
+    writing a record + an unchained audit event and reporting success (which leaves
+    the deployment invalid). Nothing is written when this refuses.
+    # ponytail: fail closed unconditionally; a deliberately-unchained deployment is
+    # not a 0.2 target, and 'success but invalid' is the worse failure."""
     try:
         from procheiron import chain as _chain  # type: ignore
+        return _chain
     except Exception:
-        _chain = None
-    if _chain is not None:
-        _chain.append_event(path, event, key_hex=os.environ.get("PROCHEIRON_SIGNING_KEY") or None)
-    else:
-        # The chain helper ships in the package and is stdlib-only, so its absence
-        # means a broken/partial install. Do not fail SILENTLY to an unchained
-        # event — warn loudly so the gap is visible, not discovered later.
-        print("memory_propose: WARNING — hash-chain helper unavailable; appending an "
-              "UNCHAINED audit event. Reinstall procheiron so the audit log stays "
-              "tamper-evident.", file=sys.stderr)
-        append_line(path, event)
+        print("memory_propose: REFUSED — hash-chain helper unavailable; refusing to write an "
+              "unchained audit event (reinstall procheiron). Nothing was written.", file=sys.stderr)
+        sys.exit(1)
+
+
+def _append_audit_event(path: Path, event: dict) -> None:
+    """Append the audit event hash-chained (and ed25519-signed when
+    PROCHEIRON_SIGNING_KEY is set). The chain helper is preflighted in main()."""
+    _chain = _require_chain()
+    _chain.append_event(path, event, key_hex=os.environ.get("PROCHEIRON_SIGNING_KEY") or None)
 
 
 def main() -> None:
@@ -290,6 +291,8 @@ def main() -> None:
         print(json.dumps(record, ensure_ascii=False, indent=2))
         print("memory_propose: DRY RUN — nothing written")
         return
+
+    _require_chain()  # preflight: refuse before writing anything if we can't chain
 
     # B5 (roadmap 3.6): parse-check + both appends run inside the single-writer
     # lock so a concurrent memory_promote rewrite cannot drop this candidate

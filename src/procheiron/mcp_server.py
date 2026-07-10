@@ -36,6 +36,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from . import lifecycle
 from . import policy
 from .resolve import ResolveError, load_config
 
@@ -108,25 +109,43 @@ def _load_memories(root: Path) -> List[Dict[str, Any]]:
     return out
 
 
-# A trusted record is one that cleared independent review. The default read path
-# returns ONLY these — an agent must not silently consume a memory Procheiron is
-# meant to be quarantining. Unreviewed records are reachable only on explicit
-# request (status="candidate", or include_untrusted=True).
-TRUSTED_STATUSES = ("active", "validated")
+# A record is trusted only when its active/validated status is BACKED by the audit
+# log's latest transition (independent actor) — not merely because the mutable
+# `status` field says so. The default read path returns only trust-derived records;
+# a forged `active` (flipped in place, no real promotion) is NOT served. Unreviewed
+# or unbacked records are reachable only on explicit request.
+TRUSTED_STATUSES = lifecycle.TRUSTED_STATUSES
+
+
+def _load_audit(root: Path) -> List[Dict[str, Any]]:
+    path = _layout(str(root))["mem_index"] / "audit.jsonl"
+    out: List[Dict[str, Any]] = []
+    if path.is_file():
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if line.strip():
+                try:
+                    out.append(json.loads(line))
+                except json.JSONDecodeError:
+                    continue
+    return out
 
 
 def search_memories(root: Path, query: str = "", status: Optional[str] = None,
                     scope: Optional[str] = None, mtype: Optional[str] = None,
                     limit: int = 20, include_untrusted: bool = False) -> List[Dict[str, Any]]:
     q = (query or "").lower()
+    trans = lifecycle.latest_transitions(_load_audit(root))
     res = []
     for m in _load_memories(root):
         st = m.get("status")
         if status:
             if st != status:
                 continue
-        elif not include_untrusted and st not in TRUSTED_STATUSES:
-            continue  # default: trusted-only
+        elif not include_untrusted:
+            # DEFAULT trusted path: status must be active/validated AND backed by the
+            # audit's latest transition. Forged/stale-status records fall through.
+            if st not in TRUSTED_STATUSES or lifecycle.trust_error(m, trans.get(m.get("id"))) is not None:
+                continue
         if scope and m.get("scope") != scope:
             continue
         if mtype and m.get("type") != mtype:
@@ -139,9 +158,16 @@ def search_memories(root: Path, query: str = "", status: Optional[str] = None,
 
 
 def get_memory(root: Path, memory_id: str) -> Optional[Dict[str, Any]]:
+    trans = lifecycle.latest_transitions(_load_audit(root))
     for m in _load_memories(root):
         if m.get("id") == memory_id:
-            return m
+            # An explicit fetch returns the record, but says plainly whether it cleared
+            # review — a consumer must not read `status` as trust on its own.
+            reason = lifecycle.trust_error(m, trans.get(memory_id))
+            out = dict(m)
+            out["trusted"] = reason is None and m.get("status") in TRUSTED_STATUSES
+            out["trust_reason"] = reason
+            return out
     return None
 
 
@@ -167,6 +193,23 @@ def promote_memory(root: Path, actor: str, memory_id: str, new_status: str, revi
                    reviewer_role: str, reviewers_completed: List[str], approver: str,
                    approver_role: str, reason: str, transition_from: str, transition_to: str,
                    allow_writes: bool, dry_run: bool = True) -> Dict[str, Any]:
+    # IDENTITY IS THE AUTHENTICATED BOUND ACTOR. A caller must not be able to review
+    # or authorize AS someone else by passing a string — that would discard the one
+    # identity binding at the exact authority boundary. Over MCP the reviewer (and, for
+    # `active`, the authorizer) IS the bound --actor; reject a mismatch loudly. True
+    # two-party separation (distinct reviewer vs authorizer) requires the CLI with
+    # separately authenticated identities.
+    na = lifecycle.norm_actor(actor)
+    if reviewer and lifecycle.norm_actor(reviewer) != na:
+        return {"allow": False, "ran_promote": False,
+                "error": f"reviewer must be the bound MCP actor ({actor!r}); "
+                         f"this session cannot review as {reviewer!r}"}
+    if approver and lifecycle.norm_actor(approver) != na:
+        return {"allow": False, "ran_promote": False,
+                "error": f"approver must be the bound MCP actor ({actor!r}); "
+                         f"this session cannot authorize as {approver!r}"}
+    reviewer = actor
+    approver = actor
     # Policy gate FIRST — the MCP server authorizes via the same reference policy the
     # validator/promoter use; identity is the bound client actor.
     level = 4  # memory_promotion_gate
@@ -226,8 +269,8 @@ TOOLS = [
          "type": {"type": "string"}, "limit": {"type": "integer"},
          "include_untrusted": {"type": "boolean"}}}},
     {"name": "memory.get",
-     "description": "Get one memory record by id (read-only). Returns the record with its "
-                    "status field; an untrusted record is only returned because you named it.",
+     "description": "Get one memory record by id (read-only). Returns the record plus a top-level "
+                    "`trusted` boolean and `trust_reason` — do not read `status` as trust on its own.",
      "inputSchema": {"type": "object", "required": ["memory_id"],
                      "properties": {"memory_id": {"type": "string"}}}},
     {"name": "memory.propose", "description": "Append a CANDIDATE memory (proposal-only, via the sanctioned writer).",
@@ -236,13 +279,15 @@ TOOLS = [
                                     "subject": {"type": "string"}, "statement": {"type": "string"},
                                     "source_paths": {"type": "array", "items": {"type": "string"}},
                                     "confidence": {"type": "number"}, "dry_run": {"type": "boolean"}}}},
-    {"name": "memory.promote", "description": "Promote a memory record — GATED by the authority policy.",
+    {"name": "memory.promote",
+     "description": "Promote a memory record — GATED. The reviewer/authorizer IS the bound MCP "
+                    "--actor; you cannot promote a record you created, and cannot act as another "
+                    "identity by passing a string. Reviewer/approver args, if sent, must equal the "
+                    "bound actor.",
      "inputSchema": {"type": "object",
-                     "required": ["memory_id", "new_status", "reviewer", "reviewers_completed", "approver", "approver_role", "reason", "transition_from", "transition_to"],
+                     "required": ["memory_id", "new_status", "reason", "transition_from", "transition_to"],
                      "properties": {"memory_id": {"type": "string"}, "new_status": {"type": "string"},
-                                    "reviewer": {"type": "string"}, "reviewer_role": {"type": "string"},
-                                    "reviewers_completed": {"type": "array", "items": {"type": "string"}},
-                                    "approver": {"type": "string"}, "approver_role": {"type": "string"},
+                                    "reviewer_role": {"type": "string"}, "approver_role": {"type": "string"},
                                     "reason": {"type": "string"}, "transition_from": {"type": "string"},
                                     "transition_to": {"type": "string"}, "dry_run": {"type": "boolean"}}}},
 ]
@@ -319,9 +364,11 @@ def handle_request(req: Dict[str, Any], root: Path, actor: str, allow_writes: bo
 
 def dispatch_tool(name: str, args: Dict[str, Any], root: Path, actor: str, allow_writes: bool) -> Any:
     if name == "memory.search":
+        # Strict: only a real JSON `true` opens the untrusted view. A string like
+        # "false" must NOT coerce to truthy (bool("false") is True) — fail closed.
         return search_memories(root, args.get("query", ""), args.get("status"), args.get("scope"),
                                args.get("type"), int(args.get("limit", 20)),
-                               bool(args.get("include_untrusted", False)))
+                               args.get("include_untrusted") is True)
     if name == "memory.get":
         return get_memory(root, args["memory_id"]) or {"error": "not found"}
     if name == "memory.propose":
@@ -329,9 +376,14 @@ def dispatch_tool(name: str, args: Dict[str, Any], root: Path, actor: str, allow
                               args.get("source_paths", []), float(args["confidence"]), allow_writes,
                               bool(args.get("dry_run", True)))
     if name == "memory.promote":
-        return promote_memory(root, actor, args["memory_id"], args["new_status"], args["reviewer"],
+        # reviewer/approver default to the bound actor; if the caller sends them they
+        # must match (enforced in promote_memory), so identity can't be spoofed.
+        return promote_memory(root, actor, args["memory_id"], args["new_status"],
+                              args.get("reviewer", actor),
                               args.get("reviewer_role", "memory_reviewer_curator"),
-                              args.get("reviewers_completed", []), args["approver"], args["approver_role"],
+                              args.get("reviewers_completed", []),
+                              args.get("approver", actor),
+                              args.get("approver_role", "memory_authority"),
                               args["reason"], args["transition_from"], args["transition_to"], allow_writes,
                               bool(args.get("dry_run", True)))
     raise ValueError(f"unknown tool {name}")

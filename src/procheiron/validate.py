@@ -55,6 +55,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 HERE = Path(__file__).resolve()
+from . import lifecycle
 from .resolve import ResolveError, load_config
 from .patterns import SECRET_PATTERNS, normalize_for_scan
 
@@ -406,11 +407,18 @@ def validate_memory_records(cfg: Any, lint: Dict[str, Any], errors: List[str],
                           f'(the log was rebuilt/rewritten, or the anchor is stale)')
 
     promotion_events: Dict[str, List[Dict[str, Any]]] = {}
+    # Latest lifecycle transition per memory, in file order — a stale promotion must
+    # not vouch for a record that was later archived/superseded and flipped back to
+    # active/validated (the mutable `status` field is not proof by itself).
+    latest_trans: Dict[str, str] = {}
     for _, event in audit_events:
         action = str(event.get('action') or event.get('event_type') or '')
         memory_id = str(event.get('memory_id') or '')
         if action in PROMOTION_EVENT_ACTIONS and memory_id:
             promotion_events.setdefault(memory_id, []).append(event)
+        st = lifecycle.ACTION_STATUS.get(action)
+        if memory_id and st:
+            latest_trans[memory_id] = st
 
     def norm_actor(value: Any) -> str:
         """Normalized identity for comparison: strip + casefold + NFKC. A list
@@ -534,6 +542,10 @@ def validate_memory_records(cfg: Any, lint: Dict[str, Any], errors: List[str],
                 errors.append(f'{loc}: {status} record has no corroborating promotion audit event '
                               f'(need action memory_promoted/validated for {rid}, status_after {status}, '
                               f'actor=reviewer≠creator and a known actor) — forged/hand-flipped record')
+            lt = latest_trans.get(rid)
+            if lt is not None and lt != status:
+                errors.append(f'{loc}: status {status!r} does not match the latest audit '
+                              f'transition ({lt!r}) — forged or stale status ({rid})')
 
         supersedes = record.get('supersedes') or []
         if supersedes:

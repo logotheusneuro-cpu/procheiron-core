@@ -399,6 +399,51 @@ def check_pip_journey() -> Dict[str, Any]:
             "detail": "fresh scaffold: full loop works from pip; case-variant self-review + audit tamper both caught"}
 
 
+def check_trust_boundary() -> Dict[str, Any]:
+    """ADVERSARIAL, in-process: forge a record and impersonate a reviewer, then assert
+    the trust boundary rejects both. This is NOT the tautology of 'returned statuses
+    belong to the trusted tuple' — it plants an `active` record with NO promotion
+    evidence and a stale-promotion record, and demands they are hidden/failed."""
+    name = "trust boundary (forged-active hidden, MCP reviewer bound, stale promotion caught)"
+    import sys as _sys
+    if str(SRC) not in _sys.path:
+        _sys.path.insert(0, str(SRC))
+    try:
+        from procheiron import mcp_server as mcpsrv, init as initmod  # noqa: F401
+    except Exception as exc:  # noqa: BLE001
+        return {"name": name, "kind": "guard", "ok": False, "detail": f"import failed: {exc}"}
+
+    def bad(detail: str) -> Dict[str, Any]:
+        return {"name": name, "kind": "guard", "ok": False, "detail": detail}
+
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td) / "c"
+        initmod.main(["--root", str(root)])
+        mem = root / "memory" / "index" / "memories.jsonl"
+        aud = root / "memory" / "index" / "audit.jsonl"
+        # A record whose `status` was flipped to active in place, with NO promotion event.
+        forged = {"id": "mem_forged", "type": "decision", "scope": "project", "subject": "f",
+                  "statement": "forged claim", "source_paths": ["x.md"], "confidence": 0.9,
+                  "status": "active", "created_by": "mallory", "reviewed_by": "eve",
+                  "valid_from": "2026-01-01"}
+        mem.write_text(json.dumps(forged) + "\n", encoding="utf-8")
+        aud.write_text(json.dumps({"memory_id": "mem_forged", "action": "memory_candidate_proposed",
+                                   "actor": "mallory", "entry_hash": "x"}) + "\n", encoding="utf-8")
+        if any(r.get("id") == "mem_forged" for r in mcpsrv.search_memories(root)):
+            return bad("forged active record (no promotion evidence) was SERVED by default MCP search")
+        got = mcpsrv.get_memory(root, "mem_forged")
+        if not got or got.get("trusted") is not False:
+            return bad(f"memory.get did not mark the forged record untrusted (trusted={got and got.get('trusted')})")
+        # MCP promote must bind reviewer to the authenticated actor: alice cannot act as bob.
+        dec = mcpsrv.promote_memory(root, "alice", "mem_forged", "active", "bob",
+                                    "memory_reviewer_curator", [], "bob", "memory_authority",
+                                    "reason", "candidate", "active", allow_writes=False)
+        if dec.get("allow") is not False or "bound MCP actor" not in (dec.get("error") or ""):
+            return bad(f"MCP promote let actor=alice review as bob: {dec}")
+    return {"name": name, "kind": "guard", "ok": True,
+            "detail": "forged active hidden from default reads; get→trusted:false; MCP reviewer bound to actor"}
+
+
 # --------------------------------------------------------------- evaluate + main
 def evaluate(fx: Dict[str, Any], result: Dict[str, Any]) -> Dict[str, Any]:
     status, errors = result.get("status", "CRASH"), result.get("errors", []) or []
@@ -436,6 +481,7 @@ def main() -> int:
     results.append(check_doctrine_currency())  # shipped constitution must carry current doctrine
     results.append(check_tool_currency())      # fixture/example tools must match adopter templates
     results.append(check_pip_journey())        # a pip-only user's first session must work end to end
+    results.append(check_trust_boundary())     # adversarial: forged/impersonated records must be rejected
 
     passed = sum(1 for r in results if r["ok"])
     report = {"validator": "procheiron package (src/procheiron)", "passed": passed, "total": len(results),

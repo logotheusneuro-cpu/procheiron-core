@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "procheiron"
-version = "0.2.3"
+version = "0.2.4"
 description = "Governance and provenance layer for agent memory: an enforced independent-review lifecycle with a tamper-evident, optionally-signed audit trail."
 readme = "README.md"
 license = { file = "LICENSE" }

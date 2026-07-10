@@ -5,6 +5,41 @@ All notable changes to this project are documented here. The format follows
 with the project's own rule that numbers are earned by conformance, not declared (see
 `CONTRIBUTING.md`).
 
+## [0.2.4] — 2026-07-10
+
+Second trust-boundary release. A re-review of 0.2.3 showed the first round was cosmetic — the
+"trusted read" filtered a mutable field, and MCP promotion took the reviewer as a free string.
+These are the real fixes; two of the "critical" gaps are now closed with an adversarial guard.
+
+### Fixed (security)
+- **MCP promotion binds identity to the authenticated actor.** `memory.promote` took
+  `reviewer`/`approver` as arguments, so a client bound as `alice` could promote alice's own
+  record by claiming `reviewer:"bob"`. The reviewer/authorizer is now the bound `--actor`; a
+  differing argument is rejected. "The agent that wrote a memory cannot approve it" is true again.
+- **Trusted reads are derived from audit evidence, not the `status` field.** Flipping a candidate
+  to `active` in place used to make it served by default. `memory.search` now serves a record on
+  the default path only if its status is backed by the audit log's latest transition; a forged
+  `active` is hidden. `memory.get` returns an explicit `trusted` boolean + `trust_reason`.
+- **Latest-transition lifecycle check in both validators.** A stale promotion no longer vouches
+  for a record that was later archived/superseded and flipped back to `active`.
+- **Writers preflight the hash-chain helper and fail closed** — no more appending an unchained
+  event and reporting success. Nothing is written when the helper is unavailable.
+- **`init` checks every audit event at the configured path** before enabling the chain lint (a
+  mixed chained/unchained log is detected); **plain `--force` no longer destroys data** — emptying
+  the indexes needs an explicit `--reset-data`.
+- **Strict boolean** on `include_untrusted` — a string like `"false"` no longer coerces to truthy.
+
+### Added
+- `lifecycle.py`: the single source of "is this record backed by independent-review evidence",
+  shared by the validator and the MCP read path.
+- `check_trust_boundary` conformance guard: forges an `active` record with no promotion evidence
+  and asserts it is hidden from default reads and that MCP promotion binds the reviewer. 20/20.
+
+### Honesty
+- `CLAIMS.md` corrected (it lagged at 0.2.2) and given an explicit "append-forgery needs signing"
+  residual; README comparison-table footnote and FAQ made precise; `INSTALL_FOR_AGENTS.md` and the
+  `init/` description no longer overclaim.
+
 ## [0.2.3] — 2026-07-10
 
 Trust-boundary release. An external independent audit found that the enforcement had real gaps

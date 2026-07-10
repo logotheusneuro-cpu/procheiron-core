@@ -147,8 +147,13 @@ What you'd otherwise do for trust in agent memory:
 | Convention docs ("agents should…") | no — honor system | no | — | none |
 | Git history on the memory files | no | yes — unless the history itself is rewritten | the files, not your store | none |
 | Your memory engine's metadata | no — self-asserted | no | that engine only | none |
-| Full provenance stack (W3C PROV + signing infra) | possible | yes | yes | weeks |
-| **Procheiron** | **yes — validator-refused** | **yes — plus a hash chain; a full rewrite needs an external anchor** | **yes — bring your own** | **`pip install`; anchor + key custody for the strongest guarantee** |
+| Full provenance stack (W3C PROV + signing infra) | possible | yes | yes | build-it-yourself |
+| **Procheiron** | **yes — validator-refused** † | **yes — plus a hash chain; a full rewrite needs an external anchor** | **yes — governs records for any store you bring** | **`pip install`; anchor + key custody for the strongest guarantee** |
+
+<sub>† Enforced against self-review and edit/reorder tampering. An insider with filesystem write
+access can still *append* a forged promotion — closing that needs the optional signing extra with
+keys held out of their reach. The honest line between tamper-evidence and authenticated provenance
+is spelled out in [CLAIMS.md](https://github.com/logotheusneuro-cpu/procheiron-core/blob/master/CLAIMS.md).</sub>
 
 Git already gives you tamper-evidence on the same assumption Procheiron makes (nobody rewrites the
 anchor) — the difference is the **enforced review gate** and record-level structure git has no
@@ -202,7 +207,7 @@ file is right.
 | `spec/` | The v0.1 specification: governance, memory commons, control plane, the normative conformance MUST-list, and the Core/Profile boundary. |
 | `conformance/` | The test of record. `generic-vault/` is a complete fictional deployment ("Meridian Atelier"); `minimal-vault/` is the 5-file minimal adopter; plus negative fixtures that must fail. |
 | `examples/minimal-adopter/` | The smallest compliant deployment — provenance and independent review without the heavyweight governance ladder. |
-| `init/` | `PORTING_GUIDE.md` for bringing Procheiron to an existing project, plus the standalone scaffolder (`procheiron init` is the canonical path). |
+| `init/` | `PORTING_GUIDE.md` for bringing Procheiron to an existing project (`procheiron init` is the scaffolder). |
 
 ## Design choices
 
@@ -233,8 +238,10 @@ Running Procheiron somewhere? Open a
 
 ## FAQ
 
-**Is this a memory engine?** No. It has no embeddings, no retrieval, no recall benchmarks, and
-never will. It governs the records your engine holds.
+**Is this a memory engine?** No. No embeddings, no ranking, no recall benchmarks, and never will.
+The `memory.search`/`memory.get` tools are a governance filter over records (by status and scope,
+returning only reviewed records by default) — not content retrieval. It governs the records your
+engine holds.
 
 **Can it stop a malicious insider?** Detection, yes; prevention only if you do two things — anchor
 the chain head outside the insider's reach and keep signing keys out of their write scope. The
