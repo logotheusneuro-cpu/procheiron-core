@@ -50,7 +50,6 @@ import argparse
 import json
 import re
 import sys
-import unicodedata
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -407,26 +406,12 @@ def validate_memory_records(cfg: Any, lint: Dict[str, Any], errors: List[str],
                           f'(the log was rebuilt/rewritten, or the anchor is stale)')
 
     promotion_events: Dict[str, List[Dict[str, Any]]] = {}
-    # Latest lifecycle transition per memory, in file order — a stale promotion must
-    # not vouch for a record that was later archived/superseded and flipped back to
-    # active/validated (the mutable `status` field is not proof by itself).
-    latest_trans: Dict[str, str] = {}
     for _, event in audit_events:
         action = str(event.get('action') or event.get('event_type') or '')
         memory_id = str(event.get('memory_id') or '')
         if action in PROMOTION_EVENT_ACTIONS and memory_id:
             promotion_events.setdefault(memory_id, []).append(event)
-        st = lifecycle.ACTION_STATUS.get(action)
-        if memory_id and st:
-            latest_trans[memory_id] = st
-
-    def norm_actor(value: Any) -> str:
-        """Normalized identity for comparison: strip + casefold + NFKC. A list
-        or non-string yields a sentinel that matches nothing (so a list-typed
-        reviewed_by cannot impersonate a string actor — review finding HIGH)."""
-        if not isinstance(value, str):
-            return f'__nonstring__{type(value).__name__}'
-        return unicodedata.normalize('NFKC', value.strip()).casefold()
+    latest_trans = lifecycle.latest_transitions([event for _, event in audit_events])
 
     def event_supports(memory_id: str, created_by: str, reviewed_by: Any, want: set) -> bool:
         """A promotion event counts only if it independently corroborates the
@@ -435,12 +420,12 @@ def validate_memory_records(cfg: Any, lint: Dict[str, Any], errors: List[str],
         from 'append one 2-field line' to 'forge a fully-consistent event whose
         actor is a registered reviewer' (review finding CRITICAL, within the
         honor-system model — true tamper-evidence is Phase 3)."""
-        cby = norm_actor(created_by)
-        rby = norm_actor(reviewed_by)
+        cby = lifecycle.norm_actor(created_by)
+        rby = lifecycle.norm_actor(reviewed_by)
         for event in promotion_events.get(memory_id, []):
             status_after = str(event.get('status_after') or '')
             actor = event.get('actor')
-            nactor = norm_actor(actor)
+            nactor = lifecycle.norm_actor(actor)
             if want and (not status_after or status_after not in want):
                 continue  # a corroborating event MUST carry a wanted status_after
             if nactor == cby:
@@ -527,11 +512,10 @@ def validate_memory_records(cfg: Any, lint: Dict[str, Any], errors: List[str],
         if status in {'active', 'validated'}:
             if status == 'active' and write_policy == 'proposal_only':
                 errors.append(f'{loc}: write_policy proposal_only record is active ({rid}) — proposals may not self-activate (SCHEMA rule 9); promotion must set approved_canonical')
-            if not reviewed_by:
-                errors.append(f'{loc}: {status} record has no reviewed_by ({rid})')
-            elif norm_actor(reviewed_by) == norm_actor(created_by):
-                errors.append(f'{loc}: {status} record was self-reviewed by its creator ({rid})')
-            elif same_group(created_by, str(reviewed_by)):
+            trust_issue = lifecycle.trust_error(record, latest_trans.get(rid))
+            if trust_issue:
+                errors.append(f'{loc}: {status} record failed trust check: {trust_issue} ({rid})')
+            if reviewed_by and lifecycle.norm_actor(reviewed_by) != lifecycle.norm_actor(created_by) and same_group(created_by, str(reviewed_by)):
                 laundering_suspects.append(rid)
             if known_actors and isinstance(reviewed_by, str) and reviewed_by and reviewed_by not in known_actors:
                 errors.append(f'{loc}: {status} record reviewer {reviewed_by!r} is not a registered actor ({rid})')
@@ -542,10 +526,6 @@ def validate_memory_records(cfg: Any, lint: Dict[str, Any], errors: List[str],
                 errors.append(f'{loc}: {status} record has no corroborating promotion audit event '
                               f'(need action memory_promoted/validated for {rid}, status_after {status}, '
                               f'actor=reviewer≠creator and a known actor) — forged/hand-flipped record')
-            lt = latest_trans.get(rid)
-            if lt is not None and lt != status:
-                errors.append(f'{loc}: status {status!r} does not match the latest audit '
-                              f'transition ({lt!r}) — forged or stale status ({rid})')
 
         supersedes = record.get('supersedes') or []
         if supersedes:

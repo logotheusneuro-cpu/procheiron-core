@@ -5,6 +5,24 @@ All notable changes to this project are documented here. The format follows
 with the project's own rule that numbers are earned by conformance, not declared (see
 `CONTRIBUTING.md`).
 
+## [Unreleased]
+
+### Fixed (security)
+- **Full validator derives trust from the same canonical lifecycle logic as MCP.** The full
+  validator's inline latest-transition map tracked status only — an older valid promotion could
+  hide a later same-status transition performed by an actor who is not the record's named
+  reviewer (MCP would distrust the record while `validate` passed it). Both surfaces now use
+  `lifecycle.trust_error()`; a forged latest promotion must also match `reviewed_by`, not just
+  any actor. Adversarial regression added to `check_trust_boundary` (verified to fail on the
+  previous code). Note: exploiting this required the disclosed append-forgery residual — this
+  narrows that residual, it does not close it; signing does.
+- **`lifecycle.latest_transitions` honors legacy `event_type`** — MCP and the validator no
+  longer render different trust verdicts on logs using the legacy field name.
+
+### Changed
+- Duplicate identity/transition logic removed from `validate.py` (single `norm_actor`,
+  single trust decision; net −5 lines).
+
 ## [0.2.4] — 2026-07-10
 
 Second trust-boundary release. A re-review of 0.2.3 showed the first round was cosmetic — the

@@ -404,7 +404,7 @@ def check_trust_boundary() -> Dict[str, Any]:
     the trust boundary rejects both. This is NOT the tautology of 'returned statuses
     belong to the trusted tuple' — it plants an `active` record with NO promotion
     evidence and a stale-promotion record, and demands they are hidden/failed."""
-    name = "trust boundary (forged-active hidden, MCP reviewer bound, stale promotion caught)"
+    name = "trust boundary (forged-active hidden, reviewer identity bound end-to-end)"
     import sys as _sys
     if str(SRC) not in _sys.path:
         _sys.path.insert(0, str(SRC))
@@ -440,8 +440,23 @@ def check_trust_boundary() -> Dict[str, Any]:
                                     "reason", "candidate", "active", allow_writes=False)
         if dec.get("allow") is not False or "bound MCP actor" not in (dec.get("error") or ""):
             return bad(f"MCP promote let actor=alice review as bob: {dec}")
+        # The full validator must use the same latest-transition trust decision as
+        # MCP. An older valid promotion cannot hide a later same-status transition
+        # performed by an actor who is not the record's named reviewer.
+        full_root = Path(td) / "full"
+        shutil.copytree(GENERIC, full_root)
+        audit = full_root / "memory" / "index" / "audit.jsonl"
+        rows = [json.loads(line) for line in audit.read_text(encoding="utf-8").splitlines()
+                if line.strip()]
+        rows.append({"memory_id": _ACTIVE, "action": "memory_promoted",
+                     "status_after": "active", "actor": "rogue"})
+        audit.write_text("\n".join(json.dumps(row) for row in rows) + "\n", encoding="utf-8")
+        result = run_validator(full_root)
+        if not any("promotion actor" in error and "does not match reviewed_by" in error
+                   for error in result.get("errors", [])):
+            return bad("full validator trusted an older promotion over the latest actor")
     return {"name": name, "kind": "guard", "ok": True,
-            "detail": "forged active hidden from default reads; get→trusted:false; MCP reviewer bound to actor"}
+            "detail": "forged active hidden; MCP actor bound; full validator checks latest reviewer"}
 
 
 # --------------------------------------------------------------- evaluate + main

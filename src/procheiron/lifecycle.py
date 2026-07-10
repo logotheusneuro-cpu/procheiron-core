@@ -44,7 +44,7 @@ def latest_transitions(audit: List[Dict[str, Any]]) -> Dict[str, Tuple[str, Any]
     out: Dict[str, Tuple[str, Any]] = {}
     for e in audit:
         mid = e.get("memory_id")
-        act = str(e.get("action", ""))
+        act = str(e.get("action") or e.get("event_type") or "")
         if mid and act in ACTION_STATUS:
             out[mid] = (ACTION_STATUS[act], e.get("actor"))
     return out
@@ -83,7 +83,7 @@ def demo() -> None:
     """Self-check: a stale promotion must not vouch for a re-activated record."""
     audit = [
         {"memory_id": "m", "action": "memory_candidate_proposed", "actor": "alice"},
-        {"memory_id": "m", "action": "memory_promoted", "actor": "bob"},
+        {"memory_id": "m", "event_type": "memory_promoted", "actor": "bob"},
         {"memory_id": "m", "action": "memory_archived", "actor": "bob"},
     ]
     lt = latest_transitions(audit)
