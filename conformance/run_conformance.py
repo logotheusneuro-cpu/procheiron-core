@@ -231,11 +231,28 @@ def run_signature_checks() -> List[Dict[str, Any]]:
             return rows
         _edit_jsonl(d / "memory" / "index" / "audit.jsonl", fn)
 
+    def _t_sig_forge_append(d: Path) -> None:
+        # THE append-forgery residual, made concrete: an insider with fs write access
+        # APPENDS a fresh, PROPERLY CHAINED promotion claiming a keyed actor — but can't
+        # sign it (no private key). The hash chain is structurally happy (prev_hash is
+        # correct), so ONLY `verify_signatures` can catch it. Proves signing catches what
+        # the chain provably cannot: a valid-looking forged append (the disclosed residual).
+        from procheiron import chain as _chain
+        lp = d / ".procheiron" / "profiles" / "meridian" / "lint.json"
+        keyed_actor = next(iter(json.loads(lp.read_text(encoding="utf-8")).get("known_actor_keys", {})))
+        audit = d / "memory" / "index" / "audit.jsonl"
+        forged = {"memory_id": "mem_forged_reactivation", "action": "memory_promoted",
+                  "status_after": "active", "actor": keyed_actor, "reason": "insider forged append"}
+        linked = _chain.link(_chain.head_from_file(str(audit)), forged)  # chained, UNSIGNED
+        with open(audit, "a", encoding="utf-8") as fh:
+            fh.write(json.dumps(linked, ensure_ascii=False) + "\n")
+
     out: List[Dict[str, Any]] = []
     for name, kind, patch, tamper, want in [
         ("signed audit log verifies (ed25519)", "pass", {"verify_signatures": True, "require_signatures": True}, None, None),
         ("forged signature on audit event", "fail", {"verify_signatures": True, "require_signatures": True}, _t_sig_forge, "signature does not verify"),
         ("stripped signature caught by verify_signatures alone", "fail", {"verify_signatures": True}, _t_sig_strip, "is unsigned"),
+        ("forged chained append caught by signing (append-forgery residual)", "fail", {"verify_signatures": True}, _t_sig_forge_append, "is unsigned"),
     ]:
         tmp = Path(tempfile.mkdtemp(prefix="pk_sig_"))
         try:

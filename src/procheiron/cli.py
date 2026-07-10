@@ -41,6 +41,45 @@ def _cmd_init(args: argparse.Namespace) -> int:
     return init_main(argv) or 0
 
 
+def _cmd_keygen(args: argparse.Namespace) -> int:
+    """Mint an ed25519 keypair for signed authorship. The PRIVATE key is written to a
+    0600 file (never printed — stdout lands in shell history/agent transcripts); only
+    the PUBLIC key hex goes to stdout, to paste into the profile lint `known_actor_keys`
+    under the actor id. This makes the append-forgery residual *closable* per deployment;
+    it does not close it on its own — the private key must live out of the writer's reach
+    (separate OS user / HSM / KMS), which is a deployment concern, not the library's."""
+    import os
+    from . import signing
+    if not signing.available():
+        print('keygen needs the optional crypto extra:  pip install "procheiron[crypto]"',
+              file=sys.stderr)
+        return 1
+    out = Path(args.out).expanduser()
+    if out.exists() and not args.force:
+        print(f"refusing to overwrite existing key file {out} (use --force)", file=sys.stderr)
+        return 1
+    priv_hex, pub_hex = signing.generate_keypair()
+    # Write private key with 0600 from creation (never a wider-mode window).
+    fd = os.open(str(out), os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, "O_NOFOLLOW", 0), 0o600)
+    try:
+        os.write(fd, (priv_hex + "\n").encode("utf-8"))
+    finally:
+        os.close(fd)
+    try:
+        os.chmod(out, 0o600)  # tighten if a prior file existed with --force
+    except OSError:
+        pass
+    print(f"private key written to {out} (mode 0600) — keep it out of the repo and the writer's reach",
+          file=sys.stderr)
+    print(f'set PROCHEIRON_SIGNING_KEY="$(cat {out})" for the writer; register the public key below:',
+          file=sys.stderr)
+    if args.actor:
+        print(json.dumps({args.actor: pub_hex}))  # ready to merge into known_actor_keys
+    else:
+        print(pub_hex)
+    return 0
+
+
 def _detect_tier(root: str) -> str:
     """minimal-memory-commons vs full-governance-profile.
 
@@ -207,6 +246,15 @@ def main() -> None:
     p_init.add_argument("--force", action="store_true",
                         help="Overwrite existing non-empty files.")
 
+    # keygen
+    p_kg = sub.add_parser("keygen",
+                          help="Mint an ed25519 keypair for signed authorship (private key → 0600 file, public key → stdout).")
+    p_kg.add_argument("--out", default="procheiron_signing_key",
+                      help="Path for the private key file (0600). Default: ./procheiron_signing_key")
+    p_kg.add_argument("--actor",
+                      help="If given, print the public key as a {actor: pubkey} object ready to merge into known_actor_keys.")
+    p_kg.add_argument("--force", action="store_true", help="Overwrite an existing key file.")
+
     # validate
     p_val = sub.add_parser("validate", help="Validate a Procheiron deployment.")
     p_val.add_argument("root", help="Root directory of the deployment to validate.")
@@ -257,6 +305,7 @@ def main() -> None:
     dispatch = {
         "version": _cmd_version,
         "init": _cmd_init,
+        "keygen": _cmd_keygen,
         "validate": _cmd_validate,
         "conformance": _cmd_conformance,
         "mcp": _cmd_mcp,

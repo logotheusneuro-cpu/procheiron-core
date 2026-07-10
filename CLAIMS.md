@@ -29,7 +29,7 @@ or "production-replicable" claim until a second real deployment passes conforman
 | MCP server is packaged + **deployment-portable** | `src/procheiron/mcp_server.py` (config-resolved paths, no hardcoded deployment paths); `conformance/test_mcp_smoke.py` passes against the generic fixture deployment | 0.1.1 staged |
 | Lifecycle + provenance model | draft→candidate→validated→active→superseded/archived/disputed; `active` requires `reviewed_by ≠ created_by` + corroborating audit event; validator enforces | live + package |
 | **Audit log is tamper-evident** (hash-chained) | `chain.py` (BLAKE2b, stdlib, zero-dep); the validator recomputes the chain when lint `verify_audit_chain` is on; conformance `chain-break` negative FAILS on a silently-edited event; the reference writer emits the chain (`chain.append_event`) | 0.2.0 package |
-| **Optional ed25519 signing** of audit entries | `signing.py` (opt-in `procheiron[crypto]`); conformance proves a signed log verifies AND a forged signature is caught; a verification that cannot run (crypto absent + signatures required) is a hard error, never a silent pass | 0.2.0 package |
+| **Optional ed25519 signing** of audit entries | `signing.py` (opt-in `procheiron[crypto]`); `procheiron keygen` mints a keypair (private key → 0600 file, public key → stdout for `known_actor_keys`); conformance proves a signed log verifies, a forged signature is caught, a stripped signature is caught, AND a **correctly-chained forged append by a keyed actor is rejected** (the chain passes it; signing catches it); a verification that cannot run (crypto absent + signatures required) is a hard error, never a silent pass | 0.2.0 package; keygen + append-forgery guard unreleased |
 
 ## ❌ Not proven / honest caveats (the load-bearing part)
 
@@ -63,7 +63,7 @@ mutable field and MCP promotion took the reviewer as a free string. These are th
 ### Still NOT closed (honest residual)
 | Limit | Detail |
 | --- | --- |
-| **Append-forgery needs signing** | Without `procheiron[crypto]` signing + `known_actor_keys` held out of the writer's reach, an insider with filesystem write access can APPEND a valid-looking, correctly-chained promotion event. The chain catches edits/reorders/deletes of past events, not a fresh forged append; the latest-transition check raises the bar but cannot close this in the no-signing case. This is the boundary between tamper-*evidence* and authenticated *provenance*. |
+| **Append-forgery needs signing WITH out-of-band key custody** | Turning on `procheiron[crypto]` signing (`verify_signatures` + `known_actor_keys`) now *rejects* a correctly-chained forged append by a keyed actor — the chain passes it, signing catches it (proven by the `forged chained append` conformance guard, and reachable via `procheiron keygen`). What signing on one shared machine does **not** close: the private key and the `known_actor_keys` registry both live in the writer's write scope, so an insider can re-register a fresh key and re-sign the forgery. The residual is fully closed only with (a) the head externally anchored (`validate --expect-head`) and (b) key custody out of the writer's reach (separate OS user / HSM / Sigstore). Until then, signing narrows append-forgery from "any string" to "needs the private key + an anchored registry" — a real bar-raise, not a full close. This is the boundary between tamper-*evidence* and authenticated *provenance*. |
 
 ## Discipline
 

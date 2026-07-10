@@ -167,6 +167,7 @@ will never grow retrieval of its own.
 | `procheiron init ./my-commons` | Scaffold a governed memory commons. |
 | `procheiron validate <root>` | Validate a deployment. Add `--expect-head <hex>` to also check the chain head against an external anchor. |
 | `procheiron scorecard <root>` | Trust-loop numbers: records, independent promotions, blocks caught. |
+| `procheiron keygen --actor <id>` | Mint an ed25519 keypair for signed authorship (needs `procheiron[crypto]`). Private key → `0600` file; public key → stdout for `known_actor_keys`. |
 | `procheiron mcp --root <root>` | Serve the commons to agents over MCP (stdio JSON-RPC). |
 | `procheiron conformance` | Run the conformance suite (needs a repo checkout). |
 | `procheiron version` | What it says. |

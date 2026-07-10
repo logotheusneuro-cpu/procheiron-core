@@ -19,9 +19,23 @@ with the project's own rule that numbers are earned by conformance, not declared
 - **`lifecycle.latest_transitions` honors legacy `event_type`** — MCP and the validator no
   longer render different trust verdicts on logs using the legacy field name.
 
+### Added
+- **`procheiron keygen`** — mints an ed25519 keypair for signed authorship. The private key
+  is written to a `0600` file (never printed — stdout lands in shell history / agent
+  transcripts); only the public key goes to stdout, as a `{actor: pubkey}` object ready to
+  paste into the profile lint `known_actor_keys`. This makes the append-forgery residual
+  *reachable to close* per deployment without dropping into a Python REPL.
+- Conformance guard **`forged chained append caught by signing`** — an insider appends a
+  correctly-chained (prev_hash-valid) promotion claiming a keyed actor but cannot sign it; the
+  hash chain passes it, and `verify_signatures` rejects it. Proves signing catches what the
+  chain structurally cannot — the disclosed append-forgery scenario. Conformance now 21/21.
+
 ### Changed
 - Duplicate identity/transition logic removed from `validate.py` (single `norm_actor`,
   single trust decision; net −5 lines).
+- `CLAIMS.md` residual sharpened: signing now *narrows* append-forgery (rejects the unsigned
+  forged append) but does not *close* it without out-of-band key custody + an anchored head —
+  stated plainly, not upgraded to "closed".
 
 ## [0.2.4] — 2026-07-10
 
