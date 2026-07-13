@@ -5,6 +5,16 @@ All notable changes to this project are documented here. The format follows
 with the project's own rule that numbers are earned by conformance, not declared (see
 `CONTRIBUTING.md`).
 
+## [Unreleased]
+
+### Changed
+- Docs honesty pass (prompted by an independent third-party analysis): README/CLAIMS now state
+  plainly that the gate delivers **provenance, not correctness** (independent review catches
+  self-dealing and forgery, not honest error — supersession handles wrongness); CLAIMS updated —
+  the authors' live deployment migrated onto the tamper-evident chain 2026-07-13 (signing still
+  pending a key-custody decision), keygen marked shipped in 0.3.0; README FAQ adds the
+  two-question setup-fit test (independently controlled writers? external anchor + key custody?).
+
 ## [0.3.0] — 2026-07-13
 
 Signing made adoptable, and one trust-decision unification. `procheiron keygen` removes the

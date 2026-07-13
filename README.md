@@ -197,6 +197,11 @@ reach — a separate user, an HSM, or keyless signing.
 
 </details>
 
+One more line worth drawing: all of this is **provenance, not correctness**. The gate proves who
+wrote and reviewed a record and that nobody rewrote history — it cannot make the content true. A
+reviewer can approve a wrong fact and it becomes trusted; what you get then is a clean trail to
+trace it and a supersession path to retire it, not prevention.
+
 We keep a running ledger of what's proven versus merely claimed in **[CLAIMS.md](https://github.com/logotheusneuro-cpu/procheiron-core/blob/master/CLAIMS.md)**,
 with evidence cited per claim. If anything in this README ever disagrees with that file, the
 file is right.
@@ -250,6 +255,13 @@ section above spells out exactly where the line is.
 
 **Why zero dependencies?** A trust layer shouldn't ask you to trust a dependency tree. Everything
 a live deployment runs is standard-library Python; even the hash chain is stdlib.
+
+**How do I know if it fits my setup?** Two questions decide it. Are your writers *independently
+controlled* — different people, teams, or processes — or does one operator run every agent? And
+can you operate an external head anchor plus key custody outside the writer's reach? Two yeses
+and the guarantees bind fully. Two noes and the review gate is closer to convention than
+enforcement for you — you still get a tamper-evident audit trail and a hard anti-self-review
+check, but the deeper promise doesn't apply to your architecture.
 
 **Is it production-ready?** Not by our own rule. Conformance passes at fixture level, but the
 "production-replicable" claim is reserved until a second *real* deployment — run by someone who
