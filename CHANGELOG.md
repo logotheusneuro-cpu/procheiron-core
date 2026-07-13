@@ -5,7 +5,11 @@ All notable changes to this project are documented here. The format follows
 with the project's own rule that numbers are earned by conformance, not declared (see
 `CONTRIBUTING.md`).
 
-## [Unreleased]
+## [0.3.0] — 2026-07-13
+
+Signing made adoptable, and one trust-decision unification. `procheiron keygen` removes the
+last practical barrier to closing the disclosed append-forgery residual per deployment; the
+full validator now renders the same trust verdict as the MCP server.
 
 ### Fixed (security)
 - **Full validator derives trust from the same canonical lifecycle logic as MCP.** The full

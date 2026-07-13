@@ -5,9 +5,10 @@ standard we ask of any memory: a claim counts as proven only with cited, reprodu
 Everything else gets labeled for what it is. One rule governs the whole file: no "production-ready"
 or "production-replicable" claim until a second real deployment passes conformance.
 
-- Last updated: 2026-07-10
-- Published package: `procheiron` **0.2.4** (PyPI, sdist + wheel) — tamper-evident hash-chained
-  audit log plus optional ed25519 signing. 0.2.1/0.2.2 added the branded README, the pip-only
+- Last updated: 2026-07-13
+- Published package: `procheiron` **0.3.0** (PyPI, sdist + wheel) — tamper-evident hash-chained
+  audit log plus optional ed25519 signing, now with `procheiron keygen` so signing is adoptable
+  without a Python REPL. 0.2.1/0.2.2 added the branded README, the pip-only
   first-run fixes, and cross-OS CI; **0.2.3/0.2.4 close the trust-boundary gaps a second
   independent audit (2026-07-09) found** (see below). 0.1.0 remains installable pinned but
   predates the chain. Rows below say which version each claim holds for.
